@@ -3,11 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Team Task Canvas - Live Realtime</title>
+  <title>Team Task Canvas - Digital Distribution</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&family=Kalam:wght@400;700&display=swap" rel="stylesheet">
   <style>
@@ -21,10 +20,6 @@
       box-shadow: 4px 8px 18px rgba(0,0,0,0.16);
       z-index: 40 !important;
     }
-    .tape-effect {
-      background: rgba(255, 255, 255, 0.65);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
     .canvas-bg {
       background-size: 24px 24px;
       background-image: radial-gradient(circle, #cbd5e1 1px, transparent 1px);
@@ -33,55 +28,71 @@
 </head>
 <body class="bg-slate-100 text-slate-800 h-screen flex flex-col overflow-hidden select-none">
 
-  <!-- 1. GOOGLE LOGIN OVERLAY -->
+  <!-- 1. DIGITAL DISTRIBUTION SECURE LOGIN OVERLAY -->
   <div id="authScreen" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center space-y-5">
-      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 text-3xl shadow-inner">
-        📌
-      </div>
-      <div>
-        <h2 class="text-xl font-bold text-slate-800 tracking-tight">Team Task Canvas</h2>
-        <p class="text-xs text-slate-500 mt-1">กระดานโพสต์อิทงานทีมแบบ Realtime</p>
+    <div class="bg-white rounded-2xl shadow-2xl p-6 sm:p-7 max-w-sm w-full space-y-4">
+      <div class="text-center space-y-1">
+        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 text-3xl shadow-inner mb-1">
+          📌
+        </div>
+        <h2 class="text-lg font-bold text-slate-800 tracking-tight">Team Task Canvas</h2>
+        <p class="text-xs font-semibold text-indigo-600">Digital Distribution Co., Ltd.</p>
+        <p class="text-[11px] text-slate-400">ระบบกระดานงานทีมเฉพาะพนักงานภายใน</p>
       </div>
 
-      <div class="space-y-3 pt-1">
-        <button onclick="loginWithGoogle()" class="w-full flex items-center justify-center gap-3 py-3 px-4 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl shadow-sm text-xs font-semibold text-slate-700 transition active:scale-95">
-          <svg class="w-4 h-4" viewBox="0 0 24 24">
-            <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
-            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.36 24 12 24z"/>
-            <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
-            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.36 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
-          </svg>
-          เข้าสู่ระบบด้วย Google Account
-        </button>
-
-        <div class="relative flex py-1 items-center">
-          <div class="flex-grow border-t border-slate-200"></div>
-          <span class="flex-shrink mx-3 text-slate-400 text-[11px]">หรือ</span>
-          <div class="flex-grow border-t border-slate-200"></div>
+      <form onsubmit="handleTeamLogin(event)" class="space-y-3.5 text-xs pt-1">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">รหัสผ่านทีม (Team Passcode) <span class="text-rose-500">*</span></label>
+          <input type="password" id="loginPasscode" required placeholder="กรอกรหัสผ่าน 4 หลัก" maxlength="8" class="w-full border border-slate-300 rounded-lg p-2.5 text-center text-base tracking-widest font-mono focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600">
         </div>
 
-        <button onclick="loginAsGuestPrompt()" class="w-full flex items-center justify-center gap-2 py-3 px-4 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-semibold text-indigo-700 transition active:scale-95 shadow-sm">
-          ⚡ เข้าใช้งานทันที (ระบุชื่อเล่น / โหมดทดลอง)
-        </button>
-      </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">อีเมลบริษัท (M365) <span class="text-rose-500">*</span></label>
+          <input type="email" id="loginEmail" required placeholder="เช่น unnop@digitaldistribution.co.th" class="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:border-indigo-600">
+          <p class="text-[10px] text-slate-400 mt-1">เฉพาะอีเมล @digitaldistribution.co.th เท่านั้น</p>
+        </div>
 
-      <p class="text-[11px] text-slate-400 leading-normal">เปิดไฟล์โดยตรง (file://) หรือผ่าน Web Server ก็ใช้งานได้สะดวกรวดเร็ว</p>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">ชื่อเล่น / ชื่อที่ใช้ในบอร์ด <span class="text-rose-500">*</span></label>
+          <input type="text" id="loginNickname" required placeholder="เช่น พี่โอม, โอม" class="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:border-indigo-600">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">ฝ่าย / ตำแหน่ง</label>
+          <input type="text" id="loginRole" placeholder="เช่น Sales, IT, Dev, Admin" class="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:border-indigo-600">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">สีประจำตัวของคุณ</label>
+          <div class="flex items-center justify-between pt-1" id="loginColorPicker">
+            <label class="cursor-pointer"><input type="radio" name="loginColor" value="#4f46e5" class="sr-only peer" checked><span class="block w-7 h-7 rounded-full bg-indigo-600 border-2 border-transparent peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-indigo-600"></span></label>
+            <label class="cursor-pointer"><input type="radio" name="loginColor" value="#059669" class="sr-only peer"><span class="block w-7 h-7 rounded-full bg-emerald-600 border-2 border-transparent peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-emerald-600"></span></label>
+            <label class="cursor-pointer"><input type="radio" name="loginColor" value="#d97706" class="sr-only peer"><span class="block w-7 h-7 rounded-full bg-amber-600 border-2 border-transparent peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-amber-600"></span></label>
+            <label class="cursor-pointer"><input type="radio" name="loginColor" value="#dc2626" class="sr-only peer"><span class="block w-7 h-7 rounded-full bg-rose-600 border-2 border-transparent peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-rose-600"></span></label>
+            <label class="cursor-pointer"><input type="radio" name="loginColor" value="#7c3aed" class="sr-only peer"><span class="block w-7 h-7 rounded-full bg-purple-600 border-2 border-transparent peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-purple-600"></span></label>
+            <label class="cursor-pointer"><input type="radio" name="loginColor" value="#0891b2" class="sr-only peer"><span class="block w-7 h-7 rounded-full bg-cyan-600 border-2 border-transparent peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-cyan-600"></span></label>
+          </div>
+        </div>
+
+        <button type="submit" class="w-full py-2.5 mt-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition active:scale-95 shadow-md flex items-center justify-center gap-1.5">
+          <span>🔒</span> เข้าสู่กระดานงาน
+        </button>
+      </form>
     </div>
   </div>
 
-  <!-- 2. PROFILE SETUP MODAL -->
+  <!-- 2. EDIT PROFILE MODAL -->
   <div id="profileModal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full space-y-5">
       <div class="text-center">
-        <h3 id="profileModalTitle" class="text-lg font-bold text-slate-800">👤 ตั้งค่าโปรไฟล์ในบอร์ด</h3>
-        <p class="text-xs text-slate-500 mt-1">กำหนดชื่อและตำแหน่งที่ต้องการให้เพื่อนร่วมทีมเห็น</p>
+        <h3 id="profileModalTitle" class="text-lg font-bold text-slate-800">👤 แก้ไขโปรไฟล์ในบอร์ด</h3>
+        <p class="text-xs text-slate-500 mt-1">แก้ไขชื่อเล่นและสีประจำตัวของคุณ</p>
       </div>
 
       <form onsubmit="saveProfile(event)" class="space-y-4 text-xs">
         <div>
           <label class="block font-semibold text-slate-700 mb-1">ชื่อเล่น / ชื่อที่ใช้ในบอร์ด <span class="text-rose-500">*</span></label>
-          <input type="text" id="profileNickname" required placeholder="เช่น โอม, พี่เอก, ฝ่าย IT" class="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:border-indigo-600">
+          <input type="text" id="profileNickname" required placeholder="เช่น โอม, พี่เอก" class="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:border-indigo-600">
         </div>
         <div>
           <label class="block font-semibold text-slate-700 mb-1">ฝ่าย / บทบาท</label>
@@ -100,8 +111,8 @@
         </div>
 
         <div class="pt-2 flex justify-end gap-2 border-t border-slate-100">
-          <button type="button" id="cancelProfileBtn" onclick="closeProfileModal()" class="hidden px-3.5 py-2 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 font-medium">ยกเลิก</button>
-          <button type="submit" class="w-full py-2.5 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition shadow-sm">เข้าสู่กระดาน</button>
+          <button type="button" id="cancelProfileBtn" onclick="closeProfileModal()" class="px-3.5 py-2 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 font-medium">ยกเลิก</button>
+          <button type="submit" class="w-full py-2.5 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition shadow-sm">บันทึก</button>
         </div>
       </form>
     </div>
@@ -112,7 +123,10 @@
     <div class="flex items-center gap-4">
       <div class="flex items-center gap-2">
         <span class="text-2xl">📌</span>
-        <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Team Canvas</h1>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Digital Distribution</h1>
+          <p class="text-[10px] text-slate-400 leading-none">Team Task Canvas</p>
+        </div>
       </div>
       <div id="connectionStatus" class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
         <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> รอเชื่อมต่อ...
@@ -222,7 +236,7 @@
         <input type="hidden" id="noteId">
         <div>
           <label class="block font-semibold text-slate-700 mb-1">ชื่องาน / รายละเอียด</label>
-          <textarea id="noteText" rows="3" required placeholder="เขียนรายละเอียดงาน เช่น ติดตามสั่งซื้อ #PO ส่งเอกสาร #PR หรือพิมพ์ #แท็ก..." class="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:border-indigo-600"></textarea>
+          <textarea id="noteText" rows="3" required placeholder="เขียนรายละเอียดงาน เช่น เสนอราคาลูกค้า บ.XXX #ใบเสนอราคา #ลูกค้า หรือส่งมอบของตาม #PO..." class="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:border-indigo-600"></textarea>
           
           <!-- Quick Hashtag Insertion Buttons -->
           <div class="mt-2.5 p-2.5 bg-slate-50 rounded-lg border border-slate-200">
@@ -303,7 +317,6 @@
     };
 
     let db = null;
-    let auth = null;
     let currentUser = null;
     let isFirebaseReady = false;
 
@@ -311,7 +324,6 @@
       if (typeof firebase !== 'undefined') {
         firebase.initializeApp(firebaseConfig);
         db = firebase.database();
-        auth = firebase.auth();
         isFirebaseReady = true;
       }
     } catch (e) {
@@ -333,10 +345,76 @@
     };
 
     // ------------------------------------------------------------------------
+    // SECURITY & ACCESS CONTROL
+    // ------------------------------------------------------------------------
+    const TEAM_SECURITY = {
+      passcode: '0789',
+      allowedDomain: '@digitaldistribution.co.th'
+    };
+
+    function handleTeamLogin(e) {
+      e.preventDefault();
+      const passcode = (document.getElementById('loginPasscode').value || '').trim();
+      const email = (document.getElementById('loginEmail').value || '').trim().toLowerCase();
+      const nickname = (document.getElementById('loginNickname').value || '').trim();
+      const role = (document.getElementById('loginRole').value || '').trim() || 'Team Member';
+      const colorRadio = document.querySelector('input[name="loginColor"]:checked');
+      const color = colorRadio ? colorRadio.value : '#4f46e5';
+
+      // 1. ตรวจสอบรหัสผ่านทีม
+      if (passcode !== TEAM_SECURITY.passcode) {
+        alert('❌ รหัสผ่านทีมไม่ถูกต้อง กรุณาติดต่อผู้ดูแลระบบเพื่อขอรหัสผ่าน');
+        document.getElementById('loginPasscode').focus();
+        return;
+      }
+
+      // 2. ตรวจสอบโดเมนอีเมลบริษัท
+      if (!email.endsWith(TEAM_SECURITY.allowedDomain.toLowerCase())) {
+        alert('❌ ขออภัย อนุญาตเฉพาะอีเมลบริษัท ' + TEAM_SECURITY.allowedDomain + ' เท่านั้น');
+        document.getElementById('loginEmail').focus();
+        return;
+      }
+
+      // สร้าง UID สวยงามจากอีเมล
+      const cleanEmail = email.replace(/[^a-zA-Z0-9]/g, '_');
+      const uid = 'user_' + cleanEmail;
+
+      currentUser = {
+        id: uid,
+        email: email,
+        name: nickname,
+        nickname: nickname,
+        role: role,
+        color: color,
+        photo: null,
+        lastActive: Date.now()
+      };
+
+      try {
+        localStorage.setItem('team_canvas_current_user', JSON.stringify(currentUser));
+      } catch (err) {}
+
+      members[uid] = currentUser;
+
+      if (isFirebaseReady) {
+        db.ref(`members/${uid}`).set(currentUser).then(() => {
+          document.getElementById('authScreen').classList.add('hidden');
+          onUserReady();
+        }).catch(err => {
+          console.warn("Save profile warning:", err);
+          document.getElementById('authScreen').classList.add('hidden');
+          onUserReady();
+        });
+      } else {
+        document.getElementById('authScreen').classList.add('hidden');
+        onUserReady();
+      }
+    }
+
+    // ------------------------------------------------------------------------
     // HASHTAG & ICON CONFIGURATION
     // ------------------------------------------------------------------------
     const TAG_CONFIG = {
-      // 1. งานตามคำขอหลักของพี่โอม
       '#ใบเสนอราคา': { icon: '📋', color: 'bg-blue-100 text-blue-900 border-blue-300 font-bold' },
       '#QT': { icon: '📋', color: 'bg-blue-100 text-blue-900 border-blue-300 font-bold' },
       '#QUOTATION': { icon: '📋', color: 'bg-blue-100 text-blue-900 border-blue-300 font-bold' },
@@ -347,8 +425,6 @@
       '#CLIENT': { icon: '🤝', color: 'bg-emerald-100 text-emerald-900 border-emerald-300 font-bold' },
       '#PO': { icon: '📦', color: 'bg-amber-100 text-amber-900 border-amber-300 font-bold' },
       '#ลูกค้าPO': { icon: '🤝📦', color: 'bg-indigo-100 text-indigo-900 border-indigo-300 font-bold' },
-
-      // 2. งานอื่นๆ ที่เกี่ยวข้อง
       '#PR': { icon: '📑', color: 'bg-orange-100 text-orange-900 border-orange-300 font-bold' },
       '#URGENT': { icon: '🔥', color: 'bg-rose-100 text-rose-900 border-rose-300 font-bold' },
       '#ด่วน': { icon: '🔥', color: 'bg-rose-100 text-rose-900 border-rose-300 font-bold' },
@@ -417,51 +493,32 @@
     // AUTH & ONBOARDING FLOW
     // ------------------------------------------------------------------------
     function initAuth() {
-      // Load local tasks and user if available
+      // Load local tasks
       try {
         const localTasks = localStorage.getItem('team_canvas_tasks');
         if (localTasks) tasks = JSON.parse(localTasks);
       } catch (e) {}
 
+      // Load saved user
       try {
         const savedUser = localStorage.getItem('team_canvas_current_user');
         if (savedUser) {
-          currentUser = JSON.parse(savedUser);
-          members[currentUser.id] = currentUser;
+          const parsed = JSON.parse(savedUser);
+          if (parsed && parsed.email && parsed.email.toLowerCase().endsWith(TEAM_SECURITY.allowedDomain.toLowerCase())) {
+            currentUser = parsed;
+            members[currentUser.id] = currentUser;
+          } else {
+            localStorage.removeItem('team_canvas_current_user');
+          }
         }
       } catch (e) {}
 
-      if (!isFirebaseReady) {
-        updateConnectionStatus(false);
-        if (currentUser) {
-          document.getElementById('authScreen').classList.add('hidden');
-          onUserReady();
-        }
-        return;
+      if (currentUser) {
+        document.getElementById('authScreen').classList.add('hidden');
+        onUserReady();
+      } else {
+        document.getElementById('authScreen').classList.remove('hidden');
       }
-
-      // Check Firebase Auth
-      auth.onAuthStateChanged((user) => {
-        if (user) {
-          document.getElementById('authScreen').classList.add('hidden');
-          db.ref(`members/${user.uid}`).once('value', (snapshot) => {
-            const data = snapshot.val();
-            if (data && data.nickname) {
-              currentUser = data;
-              try { localStorage.setItem('team_canvas_current_user', JSON.stringify(currentUser)); } catch (e) {}
-              onUserReady();
-            } else {
-              promptProfileSetup(user);
-            }
-          });
-        } else if (currentUser) {
-          // Stay logged in if guest user
-          document.getElementById('authScreen').classList.add('hidden');
-          onUserReady();
-        } else {
-          document.getElementById('authScreen').classList.remove('hidden');
-        }
-      });
     }
 
     function updateConnectionStatus(online = true) {
@@ -476,76 +533,17 @@
       }
     }
 
-    function loginWithGoogle() {
-      if (!isFirebaseReady) {
-        alert("Firebase ยังไม่พร้อมใช้งาน ระบบจะให้คุณเข้าใช้งานด้วยโหมดระบุชื่อเล่นแทน");
-        loginAsGuestPrompt();
-        return;
-      }
-
-      // Check if running on file:// protocol
-      if (window.location.protocol === 'file:') {
-        const proceedGuest = confirm(
-          "⚠️ ข้อจำกัดด้านความปลอดภัยของ Google:\n" +
-          "การเปิดไฟล์ HTML ผ่านโปรโตคอล file:// โดยตรง จะไม่สามารถเชื่อมต่อ Google OAuth Popup ได้\n\n" +
-          "ต้องการกด 'ตกลง' เพื่อเข้าใช้งานทันทีด้วยการใส่ชื่อเล่น (Guest Mode) หรือไม่?\n" +
-          "(หรือรันผ่าน Web Server: เช่น python3 -m http.server เพื่อใช้ Google Login)"
-        );
-        if (proceedGuest) {
-          loginAsGuestPrompt();
-        }
-        return;
-      }
-
-      const provider = new firebase.auth.GoogleAuthProvider();
-      auth.signInWithPopup(provider).catch(err => {
-        console.error("Sign-in error:", err);
-        if (err.code === 'auth/operation-not-supported-in-this-environment') {
-          alert("บราวเซอร์ไม่อนุญาตให้ล็อกอิน Google ในสภาพแวดล้อมนี้ กำลังเปิดโหมดใส่ชื่อเล่นให้แทนครับ");
-          loginAsGuestPrompt();
-        } else {
-          alert("เข้าสู่ระบบไม่สำเร็จ: " + err.message);
-        }
-      });
-    }
-
-    function loginAsGuestPrompt() {
-      const guestId = 'guest_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
-      promptProfileSetup({
-        uid: guestId,
-        displayName: 'พี่โอม',
-        email: ''
-      });
-    }
-
-    function promptProfileSetup(user) {
-      window.pendingAuthUser = user;
-      document.getElementById('authScreen').classList.add('hidden');
-      document.getElementById('profileNickname').value = user.displayName || user.name || '';
-      document.getElementById('profileRole').value = '';
-      document.getElementById('cancelProfileBtn').classList.add('hidden');
-      document.getElementById('profileModal').classList.remove('hidden');
-      setTimeout(() => {
-        const inp = document.getElementById('profileNickname');
-        if (inp) inp.focus();
-      }, 100);
-    }
-
     function openEditProfileModal() {
       if (!currentUser) return;
       document.getElementById('profileNickname').value = currentUser.nickname || currentUser.name || '';
       document.getElementById('profileRole').value = currentUser.role || '';
       const colorRadio = document.querySelector(`input[name="userColor"][value="${currentUser.color}"]`);
       if (colorRadio) colorRadio.checked = true;
-      document.getElementById('cancelProfileBtn').classList.remove('hidden');
       document.getElementById('profileModal').classList.remove('hidden');
     }
 
     function closeProfileModal() {
       document.getElementById('profileModal').classList.add('hidden');
-      if (!currentUser) {
-        document.getElementById('authScreen').classList.remove('hidden');
-      }
     }
 
     function saveProfile(e) {
@@ -554,57 +552,36 @@
       const role = document.getElementById('profileRole').value.trim();
       const colorRadio = document.querySelector('input[name="userColor"]:checked');
       const color = colorRadio ? colorRadio.value : '#4f46e5';
-      if (!nickname) return;
+      if (!nickname || !currentUser) return;
 
-      const baseUser = currentUser || window.pendingAuthUser || {};
-      const uid = baseUser.uid || baseUser.id || ('user_' + Date.now());
-
-      currentUser = {
-        id: uid,
-        email: baseUser.email || '',
-        name: baseUser.displayName || baseUser.name || nickname,
-        nickname: nickname,
-        role: role || 'Member',
-        color: color,
-        photo: baseUser.photoURL || baseUser.photo || null,
-        lastActive: Date.now()
-      };
+      currentUser.nickname = nickname;
+      currentUser.role = role || 'Team Member';
+      currentUser.color = color;
+      currentUser.lastActive = Date.now();
 
       try {
         localStorage.setItem('team_canvas_current_user', JSON.stringify(currentUser));
       } catch (err) {}
 
-      members[uid] = currentUser;
+      members[currentUser.id] = currentUser;
 
       if (isFirebaseReady) {
-        db.ref(`members/${uid}`).set(currentUser).then(() => {
-          closeProfileModal();
-          onUserReady();
-        }).catch(err => {
-          console.warn("Save profile to Firebase warning:", err);
-          closeProfileModal();
-          onUserReady();
+        db.ref(`members/${currentUser.id}`).set(currentUser).catch(err => {
+          console.warn("Save profile warning:", err);
         });
-      } else {
-        closeProfileModal();
-        onUserReady();
       }
+
+      closeProfileModal();
+      onUserReady();
     }
 
     function handleLogout() {
+      if (!confirm('ต้องการออกจากระบบใช่หรือไม่?')) return;
       try {
         localStorage.removeItem('team_canvas_current_user');
       } catch (e) {}
       currentUser = null;
-      if (isFirebaseReady && auth && auth.currentUser) {
-        auth.signOut().then(() => {
-          document.getElementById('authScreen').classList.remove('hidden');
-        }).catch(() => {
-          document.getElementById('authScreen').classList.remove('hidden');
-        });
-      } else {
-        document.getElementById('authScreen').classList.remove('hidden');
-      }
+      document.getElementById('authScreen').classList.remove('hidden');
     }
 
     function onUserReady() {
@@ -612,12 +589,8 @@
       document.getElementById('userRoleBadge').textContent = currentUser.role || 'Member';
 
       const avatarEl = document.getElementById('userAvatar');
-      if (currentUser.photo) {
-        avatarEl.innerHTML = `<img src="${currentUser.photo}" class="w-full h-full object-cover">`;
-      } else {
-        avatarEl.textContent = (currentUser.nickname || '?').charAt(0).toUpperCase();
-        avatarEl.style.backgroundColor = currentUser.color || '#4f46e5';
-      }
+      avatarEl.textContent = (currentUser.nickname || '?').charAt(0).toUpperCase();
+      avatarEl.style.backgroundColor = currentUser.color || '#4f46e5';
 
       startRealtimeSync();
     }
@@ -778,7 +751,7 @@
             ${assignee ? `
               <div class="flex items-center gap-1.5">
                 <span class="w-5 h-5 rounded-full text-white flex items-center justify-center font-bold text-[10px] overflow-hidden" style="background:${assignee.color || '#4f46e5'}">
-                  ${assignee.photo ? `<img src="${assignee.photo}" class="w-full h-full object-cover">` : (assignee.nickname || assignee.name || '?').charAt(0)}
+                  ${(assignee.nickname || assignee.name || '?').charAt(0)}
                 </span>
                 <span class="font-medium">${escapeHTML(assignee.nickname || assignee.name)}</span>
               </div>
@@ -820,7 +793,7 @@
             ${assignee ? `
               <span class="inline-flex items-center gap-1.5 font-semibold">
                 <span class="w-4 h-4 rounded-full text-white text-[9px] flex items-center justify-center overflow-hidden" style="background:${assignee.color || '#4f46e5'}">
-                  ${assignee.photo ? `<img src="${assignee.photo}" class="w-full h-full object-cover">` : (assignee.nickname || assignee.name || '?').charAt(0)}
+                  ${(assignee.nickname || assignee.name || '?').charAt(0)}
                 </span>
                 ${escapeHTML(assignee.nickname || assignee.name)}
               </span>
