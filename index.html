@@ -163,6 +163,13 @@
         <button id="viewCanvasBtn" onclick="switchView('canvas')" class="px-3 py-1.5 rounded-md transition-all text-slate-600 hover:text-slate-900">กระดานอิสระ (Canva)</button>
       </div>
 
+      <!-- Trash Button with Badge -->
+      <button onclick="openTrashModal()" title="ถังขยะ (เก็บสำรอง 7 วัน)" class="relative flex items-center gap-1.5 text-xs font-semibold px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg border border-slate-200 transition active:scale-95 shadow-2xs">
+        <span>🗑️</span>
+        <span>ถังขยะ</span>
+        <span id="trashCountBadge" class="hidden px-1.5 py-0.5 bg-rose-500 text-white rounded-full text-[10px] font-bold leading-none">0</span>
+      </button>
+
       <button onclick="createNewNotePrompt()" class="flex items-center gap-1 text-xs font-semibold px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm transition active:scale-95">
         ➕ แปะโน้ตงานใหม่
       </button>
@@ -340,6 +347,43 @@
           <button type="submit" class="px-4 py-1.5 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 shadow-sm">บันทึก</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- 7. TRASH BIN MODAL -->
+  <div id="trashModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
+      <div class="px-5 py-3.5 border-b border-slate-200 flex justify-between items-center bg-slate-50 shrink-0">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🗑️</span>
+          <div>
+            <h3 class="font-bold text-slate-800 text-sm">ถังขยะ (Trash Bin)</h3>
+            <p class="text-[11px] text-slate-500">เก็บงานที่ถูกลบสำรองไว้ 7 วัน ก่อนลบถาวรอัตโนมัติ</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeTrashModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">×</button>
+      </div>
+
+      <!-- Info banner -->
+      <div class="px-5 py-2 bg-amber-50 border-b border-amber-100 flex items-center gap-2 text-[11px] text-amber-800">
+        <span>⏱️</span>
+        <span>นโยบายอัตโนมัติ: งานในถังขยะลบถาวรหลัง 7 วัน • งานที่เสร็จสมบูรณ์เกิน 180 วันถูกล้างอัตโนมัติ</span>
+      </div>
+
+      <!-- Trash items list -->
+      <div id="trashItemsContainer" class="p-5 space-y-2.5 overflow-y-auto flex-1 custom-scrollbar text-xs">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- Footer -->
+      <div class="px-5 py-3 border-t border-slate-100 bg-slate-50 flex justify-between items-center shrink-0">
+        <button type="button" onclick="emptyAllTrash()" id="emptyTrashBtn" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 font-medium text-xs transition active:scale-95 disabled:opacity-40 disabled:pointer-events-none">
+          🗑️ ล้างถังขยะทั้งหมด
+        </button>
+        <button type="button" onclick="closeTrashModal()" class="px-4 py-1.5 rounded-lg bg-slate-800 text-white font-medium text-xs hover:bg-slate-900 transition">
+          ปิด
+        </button>
+      </div>
     </div>
   </div>
 
@@ -607,8 +651,10 @@
     function getActiveTags() {
       const set = new Set();
       Object.values(tasks).forEach(t => {
-        const found = extractTags(t.title);
-        found.forEach(tag => set.add(tag));
+        if (t && !t.isDeleted) {
+          const found = extractTags(t.title);
+          found.forEach(tag => set.add(tag));
+        }
       });
       return Array.from(set);
     }
@@ -621,6 +667,7 @@
       try {
         const localTasks = localStorage.getItem('team_canvas_tasks');
         if (localTasks) tasks = JSON.parse(localTasks);
+        runRetentionMaintenance();
       } catch (e) {}
 
       // Load saved user
@@ -734,8 +781,12 @@
           } else {
             tasks = {};
           }
+          runRetentionMaintenance();
           renderMembersUI();
           renderApp();
+          if (document.getElementById('trashModal') && !document.getElementById('trashModal').classList.contains('hidden')) {
+            renderTrashUI();
+          }
         });
 
         db.ref('members').on('value', (snap) => {
@@ -765,27 +816,36 @@
     }
 
     function deleteTask(id) {
-      if (!confirm('ต้องการลบโน้ตนี้ใช่หรือไม่?')) return;
-      delete tasks[id];
-      try { localStorage.setItem('team_canvas_tasks', JSON.stringify(tasks)); } catch (e) {}
-      renderMembersUI();
-      renderApp();
+      const task = tasks[id];
+      if (!task) return;
+      if (!confirm('ต้องการย้ายงานนี้ไปที่ "ถังขยะ" ใช่หรือไม่?\n(งานจะถูกเก็บสำรองไว้ 7 วัน สามารถกู้คืนได้ตลอดเวลา)')) return;
 
-      if (isFirebaseReady) {
-        db.ref(`tasks/${id}`).remove().catch(err => {
-          console.warn("Firebase remove warning:", err);
-        });
-      }
+      task.isDeleted = true;
+      task.deletedAt = Date.now();
+      task.updatedAt = Date.now();
+      saveTaskToDB(task);
     }
 
     function updateTaskStatus(id, newStatus) {
       if (tasks[id]) {
         tasks[id].status = newStatus;
+        if (newStatus === 'done') {
+          if (!tasks[id].completedAt) tasks[id].completedAt = Date.now();
+        } else {
+          delete tasks[id].completedAt;
+        }
+        tasks[id].updatedAt = Date.now();
         try { localStorage.setItem('team_canvas_tasks', JSON.stringify(tasks)); } catch (e) {}
         renderApp();
       }
       if (isFirebaseReady) {
-        db.ref(`tasks/${id}/status`).set(newStatus).catch(err => {
+        const updates = { status: newStatus, updatedAt: Date.now() };
+        if (newStatus === 'done') {
+          updates.completedAt = (tasks[id] && tasks[id].completedAt) || Date.now();
+        } else {
+          updates.completedAt = null;
+        }
+        db.ref(`tasks/${id}`).update(updates).catch(err => {
           console.warn("Firebase status update warning:", err);
         });
       }
@@ -805,11 +865,205 @@
     }
 
     // ------------------------------------------------------------------------
+    // DATA RETENTION & TRASH BIN (7 DAYS TRASH, 180 DAYS DONE AUTO-PURGE)
+    // ------------------------------------------------------------------------
+    const RETENTION_RULES = {
+      TRASH_DAYS: 7,
+      DONE_DAYS: 180
+    };
+
+    function runRetentionMaintenance() {
+      const now = Date.now();
+      const trashLimitMs = RETENTION_RULES.TRASH_DAYS * 24 * 60 * 60 * 1000;
+      const doneLimitMs = RETENTION_RULES.DONE_DAYS * 24 * 60 * 60 * 1000;
+      let hasChanges = false;
+
+      Object.values(tasks).forEach(task => {
+        if (!task || !task.id) return;
+
+        // 1. Purge trash older than 7 days
+        if (task.isDeleted) {
+          const deletedAt = task.deletedAt || task.updatedAt || 0;
+          if (now - deletedAt > trashLimitMs) {
+            delete tasks[task.id];
+            hasChanges = true;
+            if (isFirebaseReady) {
+              db.ref(`tasks/${task.id}`).remove().catch(err => console.warn(err));
+            }
+          }
+        }
+        // 2. Purge done tasks older than 180 days
+        else if (task.status === 'done') {
+          const completedAt = task.completedAt || task.updatedAt || 0;
+          if (completedAt > 0 && (now - completedAt > doneLimitMs)) {
+            delete tasks[task.id];
+            hasChanges = true;
+            if (isFirebaseReady) {
+              db.ref(`tasks/${task.id}`).remove().catch(err => console.warn(err));
+            }
+          }
+        }
+      });
+
+      if (hasChanges) {
+        try { localStorage.setItem('team_canvas_tasks', JSON.stringify(tasks)); } catch (e) {}
+      }
+    }
+
+    function renderTrashUI() {
+      const container = document.getElementById('trashItemsContainer');
+      const emptyBtn = document.getElementById('emptyTrashBtn');
+      if (!container) return;
+
+      const trashTasks = Object.values(tasks).filter(t => t && t.isDeleted);
+      
+      if (emptyBtn) {
+        emptyBtn.disabled = trashTasks.length === 0;
+      }
+
+      if (trashTasks.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-12 text-slate-400 space-y-2">
+            <div class="text-4xl">🗑️</div>
+            <div class="text-sm font-semibold text-slate-600">ถังขยะว่างเปล่า</div>
+            <div class="text-xs">ไม่มีงานที่ถูกลบ (งานที่ลบจะถูกเก็บไว้ 7 วันก่อนลบถาวร)</div>
+          </div>
+        `;
+        return;
+      }
+
+      trashTasks.sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
+
+      const now = Date.now();
+      const limitMs = RETENTION_RULES.TRASH_DAYS * 24 * 60 * 60 * 1000;
+
+      container.innerHTML = trashTasks.map(task => {
+        const deletedAt = task.deletedAt || task.updatedAt || now;
+        const elapsed = now - deletedAt;
+        const remainingMs = Math.max(0, limitMs - elapsed);
+        let timeRemainingText = '';
+        if (remainingMs <= 0) {
+          timeRemainingText = 'หมดอายุแล้ว (กำลังลบถาวร)';
+        } else if (remainingMs < 24 * 60 * 60 * 1000) {
+          const hours = Math.max(1, Math.ceil(remainingMs / (60 * 60 * 1000)));
+          timeRemainingText = `เหลืออีก ~${hours} ชม.`;
+        } else {
+          const days = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+          timeRemainingText = `เหลืออีก ${days} วัน`;
+        }
+
+        const assignee = members[task.assignee];
+
+        return `
+          <div class="p-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 shadow-2xs transition space-y-2">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex-1 min-w-0">
+                ${renderTagBadgesHTML(task.title)}
+                <p class="font-medium text-slate-800 text-xs break-words mt-0.5">${escapeHTML(task.title)}</p>
+              </div>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button onclick="restoreTask('${task.id}')" class="px-2.5 py-1 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-semibold text-[11px] transition flex items-center gap-1 active:scale-95 shadow-2xs" title="กู้คืนงานกลับเข้าบอร์ด">
+                  <span>🔄</span> กู้คืน
+                </button>
+                <button onclick="permanentlyDeleteTask('${task.id}')" class="px-2 py-1 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-[11px] transition active:scale-95 shadow-2xs" title="ลบถาวรทันที">
+                  <span>✕</span> ลบถาวร
+                </button>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pt-1.5 border-t border-slate-100 text-[11px] text-slate-500">
+              <div class="flex items-center gap-2">
+                ${assignee ? `
+                  <span class="inline-flex items-center gap-1 font-medium text-slate-600">
+                    <span class="w-4 h-4 rounded-full text-white text-[9px] flex items-center justify-center overflow-hidden" style="background:${assignee.color || '#4f46e5'}">
+                      ${(assignee.nickname || assignee.name || '?').charAt(0)}
+                    </span>
+                    ${escapeHTML(assignee.nickname || assignee.name)}
+                  </span>
+                ` : '<span class="italic text-slate-400">ไม่ระบุ</span>'}
+                <span>• สถานะเดิม: <strong class="uppercase text-slate-600">${task.status || 'todo'}</strong></span>
+              </div>
+              <span class="text-rose-600 font-semibold text-[10px] bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">
+                ⏳ ${timeRemainingText}
+              </span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function openTrashModal() {
+      renderTrashUI();
+      document.getElementById('trashModal').classList.remove('hidden');
+    }
+
+    function closeTrashModal() {
+      document.getElementById('trashModal').classList.add('hidden');
+    }
+
+    function restoreTask(id) {
+      const task = tasks[id];
+      if (!task) return;
+      delete task.isDeleted;
+      delete task.deletedAt;
+      task.updatedAt = Date.now();
+      saveTaskToDB(task);
+      renderTrashUI();
+    }
+
+    function permanentlyDeleteTask(id) {
+      if (!confirm('ต้องการลบงานนี้ถาวรใช่หรือไม่?\n(จะไม่สามารถกู้คืนได้อีก)')) return;
+      delete tasks[id];
+      try { localStorage.setItem('team_canvas_tasks', JSON.stringify(tasks)); } catch (e) {}
+      renderMembersUI();
+      renderApp();
+      renderTrashUI();
+
+      if (isFirebaseReady) {
+        db.ref(`tasks/${id}`).remove().catch(err => {
+          console.warn("Firebase remove warning:", err);
+        });
+      }
+    }
+
+    function emptyAllTrash() {
+      const trashIds = Object.keys(tasks).filter(id => tasks[id] && tasks[id].isDeleted);
+      if (trashIds.length === 0) return;
+      if (!confirm(`ต้องการล้างงานในถังขยะทั้งหมด (${trashIds.length} รายการ) ถาวรใช่หรือไม่?\n(จะไม่สามารถกู้คืนได้อีก)`)) return;
+
+      trashIds.forEach(id => {
+        delete tasks[id];
+        if (isFirebaseReady) {
+          db.ref(`tasks/${id}`).remove().catch(err => console.warn(err));
+        }
+      });
+
+      try { localStorage.setItem('team_canvas_tasks', JSON.stringify(tasks)); } catch (e) {}
+      renderMembersUI();
+      renderApp();
+      renderTrashUI();
+    }
+
+    // ------------------------------------------------------------------------
     // UI RENDERING
     // ------------------------------------------------------------------------
     function renderApp() {
       const q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
-      const filteredList = Object.values(tasks).filter(task => {
+      const allTaskValues = Object.values(tasks);
+      const activeTasks = allTaskValues.filter(t => t && !t.isDeleted);
+      const trashTasks = allTaskValues.filter(t => t && t.isDeleted);
+
+      // Update Trash Count Badge
+      const trashBadge = document.getElementById('trashCountBadge');
+      if (trashBadge) {
+        if (trashTasks.length > 0) {
+          trashBadge.textContent = trashTasks.length;
+          trashBadge.classList.remove('hidden');
+        } else {
+          trashBadge.classList.add('hidden');
+        }
+      }
+
+      const filteredList = activeTasks.filter(task => {
         const checklistText = getChecklistItems(task).map(i => i.text || '').join(' ').toLowerCase();
         const matchQuery = (task.title || '').toLowerCase().includes(q) || checklistText.includes(q);
         let matchFilter = true;
@@ -824,7 +1078,7 @@
       });
 
       let todo = 0, doing = 0, review = 0, done = 0;
-      Object.values(tasks).forEach(t => {
+      activeTasks.forEach(t => {
         if (t.status === 'todo') todo++;
         else if (t.status === 'doing') doing++;
         else if (t.status === 'review') review++;
@@ -1265,6 +1519,15 @@
         updatedAt: Date.now()
       };
 
+      if (status === 'done') {
+        taskData.completedAt = existing.completedAt || Date.now();
+      }
+
+      if (existing.isDeleted) {
+        taskData.isDeleted = true;
+        taskData.deletedAt = existing.deletedAt || Date.now();
+      }
+
       saveTaskToDB(taskData);
       closeNoteModal();
     }
@@ -1290,6 +1553,9 @@
         return lookup[tag] || tag;
       });
     }
+
+    // Periodic background auto-purge (runs every hour)
+    setInterval(runRetentionMaintenance, 60 * 60 * 1000);
 
     window.onload = initAuth;
   </script>
