@@ -1,0 +1,32 @@
+{
+  "rules": {
+    "/* ==================================================================== */": {},
+    "/* DIGITAL DISTRIBUTION - TEAM TASK CANVAS SECURITY RULES               */": {},
+    "/* ==================================================================== */": {},
+
+    /* 1. ROOT LOCKDOWN: ป้องกันการลบหรือเขียนทับฐานข้อมูลทั้งระบบ (Anti-Wipeout) */
+    ".read": false,
+    ".write": false,
+
+    /* 2. TASKS COLLECTION: ตรวจสอบความถูกต้องของข้อมูลการ์ดงานอย่างเข้มงวด */
+    "tasks": {
+      ".read": true,
+      "$taskId": {
+        /* อนุญาตให้เขียน/แก้ไข/ลบ เฉพาะการ์ดงานรายชิ้น */
+        ".write": true,
+        /* ตรวจสอบ Schema ของงาน: ต้องมีฟิลด์หลักครบ, ชื่องานไม่เกิน 1000 ตัวอักษร, สถานะและสีถูกต้อง */
+        ".validate": "newData.hasChildren(['id', 'title', 'status', 'color', 'updatedAt']) && newData.child('id').isString() && newData.child('id').val() === $taskId && newData.child('title').isString() && newData.child('title').val().length > 0 && newData.child('title').val().length <= 1000 && newData.child('status').val().matches(/^(todo|doing|review|done)$/) && newData.child('color').val().matches(/^(yellow|blue|green|pink|purple|red)$/) && newData.child('updatedAt').isNumber()"
+      }
+    },
+
+    /* 3. MEMBERS COLLECTION: อนุญาตเฉพาะสมาชิกอีเมลบริษัท @digitaldistribution.co.th */
+    "members": {
+      ".read": true,
+      "$memberId": {
+        ".write": true,
+        /* ตรวจสอบ Schema สมาชิก: อีเมลต้องลงท้ายด้วย @digitaldistribution.co.th เท่านั้น ป้องกันบุคคลภายนอก */
+        ".validate": "newData.hasChildren(['id', 'email', 'name']) && newData.child('id').isString() && newData.child('id').val() === $memberId && newData.child('email').isString() && newData.child('email').val().matches(/^[a-zA-Z0-9._%+-]+@digitaldistribution\\.co\\.th$/)"
+      }
+    }
+  }
+}

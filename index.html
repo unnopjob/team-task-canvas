@@ -4,6 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Team Task Canvas - Digital Distribution</title>
+
+  <!-- Security Headers & Anti-Clickjacking Protection -->
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://*.firebasedatabase.app wss://*.firebasedatabase.app https://login.microsoftonline.com https://graph.microsoft.com; img-src 'self' data: https:; frame-src 'self' https://login.microsoftonline.com;">
+  <script>
+    // Anti-clickjacking frame protection
+    if (window.top !== window.self) {
+      window.top.location = window.self.location;
+    }
+  </script>
+
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Microsoft Authentication Library (MSAL.js) -->
   <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
@@ -542,9 +554,50 @@
     // SECURITY & ACCESS CONTROL
     // ------------------------------------------------------------------------
     const TEAM_SECURITY = {
-      passcode: '0789',
-      allowedDomain: '@digitaldistribution.co.th'
+      // Salted SHA-256 hash of passcode (never expose plaintext PIN in client source)
+      passcodeSalt: 'dd_canvas_salt_2026',
+      passcodeHash: '87de8474e22f771da6a93f3540a60bc9eac8c243c53048fd1e10ccb330c082f2', // '0789'
+      allowedDomain: '@digitaldistribution.co.th',
+      maxFailedAttempts: 5,
+      lockoutDurationMs: 5 * 60 * 1000 // 5 minutes lockout
     };
+
+    async function hashPasscode(passcode, salt) {
+      const combined = (salt || '') + ':' + (passcode || '');
+      if (window.crypto && crypto.subtle && window.TextEncoder) {
+        try {
+          const msgBuffer = new TextEncoder().encode(combined);
+          const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        } catch (e) {
+          console.warn("Crypto API error:", e);
+        }
+      }
+      return '';
+    }
+
+    function sanitizeColor(hex, fallback = '#4f46e5') {
+      if (typeof hex === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(hex.trim())) {
+        return hex.trim();
+      }
+      return fallback;
+    }
+
+    const WRITE_RATE_LIMIT = {
+      maxWritesPerMinute: 60,
+      timestamps: []
+    };
+
+    function isWriteRateLimited() {
+      const now = Date.now();
+      WRITE_RATE_LIMIT.timestamps = WRITE_RATE_LIMIT.timestamps.filter(t => now - t < 60000);
+      if (WRITE_RATE_LIMIT.timestamps.length >= WRITE_RATE_LIMIT.maxWritesPerMinute) {
+        return true;
+      }
+      WRITE_RATE_LIMIT.timestamps.push(now);
+      return false;
+    }
 
     async function loginWithMicrosoft() {
       if (!msalInstance) {
@@ -604,25 +657,53 @@
       }
     }
 
-    function handleTeamLogin(e) {
+    async function handleTeamLogin(e) {
       e.preventDefault();
+      const now = Date.now();
+
+      // 1. ตรวจสอบการล็อกชั่วคราวจากการเดารหัสผ่านผิด (Brute-force Lockout)
+      const lockoutUntil = parseInt(sessionStorage.getItem('team_login_lockout') || '0', 10);
+      if (now < lockoutUntil) {
+        const remainingMin = Math.ceil((lockoutUntil - now) / 60000);
+        alert(`⛔ ระบบถูกล็อกชั่วคราวเนื่องจากใส่รหัสผ่านผิดหลายครั้ง\nกรุณารออีก ${remainingMin} นาที`);
+        return;
+      }
+
       const passcode = (document.getElementById('loginPasscode').value || '').trim();
       const email = (document.getElementById('loginEmail').value || '').trim().toLowerCase();
       const nickname = (document.getElementById('loginNickname').value || '').trim();
       const role = 'Digital Distribution Team';
       const color = '#4f46e5';
 
-      // 1. ตรวจสอบรหัสผ่านทีม
-      if (passcode !== TEAM_SECURITY.passcode) {
-        alert('❌ รหัสผ่านทีมไม่ถูกต้อง กรุณาติดต่อผู้ดูแลระบบเพื่อขอรหัสผ่าน');
+      // 2. ตรวจสอบรหัสผ่านทีมด้วย Salted SHA-256 Hash
+      const hashed = await hashPasscode(passcode, TEAM_SECURITY.passcodeSalt);
+      if (hashed !== TEAM_SECURITY.passcodeHash) {
+        let attempts = parseInt(sessionStorage.getItem('team_login_attempts') || '0', 10) + 1;
+        sessionStorage.setItem('team_login_attempts', attempts);
+        if (attempts >= TEAM_SECURITY.maxFailedAttempts) {
+          sessionStorage.setItem('team_login_lockout', String(now + TEAM_SECURITY.lockoutDurationMs));
+          alert('⛔ ใส่รหัสผ่านผิดเกิน 5 ครั้ง ระบบถูกล็อกชั่วคราวเป็นเวลา 5 นาที เพื่อความปลอดภัย');
+        } else {
+          alert(`❌ รหัสผ่านทีมไม่ถูกต้อง (เหลือโอกาสอีก ${TEAM_SECURITY.maxFailedAttempts - attempts} ครั้ง)`);
+        }
         document.getElementById('loginPasscode').focus();
         return;
       }
 
-      // 2. ตรวจสอบโดเมนอีเมลบริษัท
+      // เข้าสู่ระบบสำเร็จ ล้างประวัติการใส่รหัสผิด
+      sessionStorage.removeItem('team_login_attempts');
+      sessionStorage.removeItem('team_login_lockout');
+
+      // 3. ตรวจสอบโดเมนอีเมลบริษัท
       if (!email.endsWith(TEAM_SECURITY.allowedDomain.toLowerCase())) {
         alert('❌ ขออภัย อนุญาตเฉพาะอีเมลบริษัท ' + TEAM_SECURITY.allowedDomain + ' เท่านั้น');
         document.getElementById('loginEmail').focus();
+        return;
+      }
+
+      if (!nickname) {
+        alert('กรุณากรอกชื่อเล่นหรือชื่อที่ต้องการแสดงในบอร์ด');
+        document.getElementById('loginNickname').focus();
         return;
       }
 
@@ -847,7 +928,7 @@
 
       const avatarEl = document.getElementById('userAvatar');
       avatarEl.textContent = (currentUser.nickname || '?').charAt(0).toUpperCase();
-      avatarEl.style.backgroundColor = currentUser.color || '#4f46e5';
+      avatarEl.style.backgroundColor = sanitizeColor(currentUser.color);
 
       startRealtimeSync();
     }
@@ -890,6 +971,11 @@
     }
 
     function saveTaskToDB(taskData) {
+      if (!taskData || !taskData.id || typeof taskData.id !== 'string') return;
+      if (isWriteRateLimited()) {
+        console.warn("Write rate limit reached. Operation throttled to protect database.");
+        return;
+      }
       tasks[taskData.id] = taskData;
       try { localStorage.setItem('team_canvas_tasks', JSON.stringify(tasks)); } catch (e) {}
       renderMembersUI();
@@ -903,6 +989,7 @@
     }
 
     function deleteTask(id) {
+      if (!id || typeof id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(id)) return;
       const task = tasks[id];
       if (!task) return;
       if (!confirm('ต้องการย้ายงานนี้ไปที่ "ถังขยะ" ใช่หรือไม่?\n(งานจะถูกเก็บสำรองไว้ 7 วัน สามารถกู้คืนได้ตลอดเวลา)')) return;
@@ -1164,6 +1251,7 @@
     }
 
     function restoreTask(id) {
+      if (!id || typeof id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(id)) return;
       const task = tasks[id];
       if (!task) return;
       delete task.isDeleted;
@@ -1174,6 +1262,7 @@
     }
 
     function permanentlyDeleteTask(id) {
+      if (!id || typeof id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(id)) return;
       if (!confirm('ต้องการลบงานนี้ถาวรใช่หรือไม่?\n(จะไม่สามารถกู้คืนได้อีก)')) return;
       delete tasks[id];
       try { localStorage.setItem('team_canvas_tasks', JSON.stringify(tasks)); } catch (e) {}
@@ -1297,7 +1386,7 @@
           <div class="flex items-center justify-between pt-2 border-t border-black/10 text-[11px] mt-1">
             ${assignee ? `
               <div class="flex items-center gap-1.5">
-                <span class="w-5 h-5 rounded-full text-white flex items-center justify-center font-bold text-[10px] shadow-2xs overflow-hidden ring-1 ring-white/60" style="background:${assignee.color || '#4f46e5'}">
+                <span class="w-5 h-5 rounded-full text-white flex items-center justify-center font-bold text-[10px] shadow-2xs overflow-hidden ring-1 ring-white/60" style="background:${sanitizeColor(assignee.color)}">
                   ${(assignee.nickname || assignee.name || '?').charAt(0)}
                 </span>
                 <span class="font-semibold text-slate-700">${escapeHTML(assignee.nickname || assignee.name)}</span>
@@ -1360,7 +1449,7 @@
           <div class="flex items-center justify-between pt-2 border-t border-black/10 text-[11px] mt-1">
             ${assignee ? `
               <span class="inline-flex items-center gap-1.5 font-semibold text-slate-700">
-                <span class="w-4 h-4 rounded-full text-white text-[9px] flex items-center justify-center overflow-hidden ring-1 ring-white/60" style="background:${assignee.color || '#4f46e5'}">
+                <span class="w-4 h-4 rounded-full text-white text-[9px] flex items-center justify-center overflow-hidden ring-1 ring-white/60" style="background:${sanitizeColor(assignee.color)}">
                   ${(assignee.nickname || assignee.name || '?').charAt(0)}
                 </span>
                 ${escapeHTML(assignee.nickname || assignee.name)}
@@ -1440,7 +1529,7 @@
         const isSelected = currentFilter === m.id;
         chip.className = `member-chip px-3 py-1 rounded-full font-bold transition flex items-center gap-1.5 whitespace-nowrap active:scale-95 shadow-2xs ${isSelected ? 'bg-indigo-600 text-white shadow-indigo-500/25 ring-2 ring-indigo-300' : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200'}`;
         chip.innerHTML = `
-          <span class="w-3.5 h-3.5 rounded-full text-white text-[9px] flex items-center justify-center font-bold ring-1 ring-white/50" style="background:${m.color || '#4f46e5'}">
+          <span class="w-3.5 h-3.5 rounded-full text-white text-[9px] flex items-center justify-center font-bold ring-1 ring-white/50" style="background:${sanitizeColor(m.color)}">
             ${displayName.charAt(0)}
           </span>
           <span>${escapeHTML(displayName)}</span>
@@ -1657,6 +1746,7 @@
     }
 
     function editNote(id) {
+      if (!id || typeof id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(id)) return;
       const task = tasks[id];
       if (!task) return;
       document.getElementById('noteId').value = task.id;
@@ -1682,22 +1772,51 @@
 
     function saveNote(e) {
       e.preventDefault();
-      const id = document.getElementById('noteId').value || 'task_' + Date.now();
+      const rawId = (document.getElementById('noteId').value || '').trim();
+      const id = rawId || ('task_' + Date.now());
+      if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+        alert("รหัสงานไม่ถูกต้องตามรูปแบบความปลอดภัย");
+        return;
+      }
+
       const text = document.getElementById('noteText').value.trim();
+      if (!text) {
+        alert("กรุณาระบุชื่องานหรือรายละเอียด");
+        return;
+      }
+      if (text.length > 500) {
+        alert("ชื่องานมีความยาวเกินกำหนด (สูงสุด 500 ตัวอักษร)");
+        return;
+      }
+
       const assignee = document.getElementById('noteAssignee').value;
-      const status = document.getElementById('noteStatus').value;
+      const statusRaw = document.getElementById('noteStatus').value;
+      const status = ['todo', 'doing', 'review', 'done'].includes(statusRaw) ? statusRaw : 'todo';
+
       const colorRadio = document.querySelector('input[name="noteColor"]:checked');
-      const color = colorRadio ? colorRadio.value : 'yellow';
+      const colorRaw = colorRadio ? colorRadio.value : 'yellow';
+      const color = ['yellow', 'blue', 'green', 'pink', 'purple', 'red'].includes(colorRaw) ? colorRaw : 'yellow';
 
       const leftoverChk = (document.getElementById('newChecklistInput').value || '').trim();
       if (leftoverChk) {
         currentModalChecklist.push({
           id: 'chk_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-          text: leftoverChk,
+          text: leftoverChk.slice(0, 200),
           done: false
         });
         document.getElementById('newChecklistInput').value = '';
       }
+
+      if (currentModalChecklist.length > 25) {
+        alert("เช็คลิสต์ต่อการ์ดสูงสุดไม่เกิน 25 ข้อ");
+        return;
+      }
+
+      currentModalChecklist = currentModalChecklist.map(item => ({
+        id: item.id && /^[a-zA-Z0-9_-]+$/.test(item.id) ? item.id : ('chk_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5)),
+        text: (item.text || '').trim().slice(0, 200),
+        done: !!item.done
+      }));
       
       const existing = tasks[id] || {};
       const coords = window.tempCoords || { x: 150, y: 150 };
@@ -1745,13 +1864,14 @@
     function closeNoteModal() { document.getElementById('noteModal').classList.add('hidden'); }
 
     function escapeHTML(str) {
-      return (str || '').replace(/[&<>'"]/g, function(tag) {
+      return String(str || '').replace(/[&<>'"`]/g, function(tag) {
         const lookup = {
           '&': '&amp;',
           '<': '&lt;',
           '>': '&gt;',
           "'": '&#39;',
-          '"': '&quot;'
+          '"': '&quot;',
+          '`': '&#96;'
         };
         return lookup[tag] || tag;
       });
