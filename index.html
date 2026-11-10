@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Team Task Canvas - Live Realtime</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&family=Kalam:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Prompt', sans-serif; }
+    .handwriting { font-family: 'Kalam', cursive, 'Prompt', sans-serif; }
+    .sticky-note {
+      box-shadow: 2px 4px 10px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .sticky-note:hover {
+      box-shadow: 4px 8px 18px rgba(0,0,0,0.16);
+      z-index: 40 !important;
+    }
+    .tape-effect {
+      background: rgba(255, 255, 255, 0.65);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .canvas-bg {
+      background-size: 24px 24px;
+      background-image: radial-gradient(circle, #cbd5e1 1px, transparent 1px);
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 h-screen flex flex-col overflow-hidden select-none">
+
+  <!-- 1. GOOGLE LOGIN OVERLAY -->
+  <div id="authScreen" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center space-y-5">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 text-3xl shadow-inner">
+        📌
+      </div>
+      <div>
+        <h2 class="text-xl font-bold text-slate-800 tracking-tight">Team Task Canvas</h2>
+        <p class="text-xs text-slate-500 mt-1">กระดานโพสต์อิทงานทีมแบบ Realtime</p>
+      </div>
+
+      <div class="space-y-3 pt-1">
+        <button onclick="loginWithGoogle()" class="w-full flex items-center justify-center gap-3 py-3 px-4 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl shadow-sm text-xs font-semibold text-slate-700 transition active:scale-95">
+          <svg class="w-4 h-4" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.36 24 12 24z"/>
+            <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.36 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+          </svg>
+          เข้าสู่ระบบด้วย Google Account
+        </button>
+
+        <div class="relative flex py-1 items-center">
+          <div class="flex-grow border-t border-slate-200"></div>
+          <span class="flex-shrink mx-3 text-slate-400 text-[11px]">หรือ</span>
+          <div class="flex-grow border-t border-slate-200"></div>
+        </div>
+
+        <button onclick="loginAsGuestPrompt()" class="w-full flex items-center justify-center gap-2 py-3 px-4 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-semibold text-indigo-700 transition active:scale-95 shadow-sm">
+          ⚡ เข้าใช้งานทันที (ระบุชื่อเล่น / โหมดทดลอง)
+        </button>
+      </div>
+
+      <p class="text-[11px] text-slate-400 leading-normal">เปิดไฟล์โดยตรง (file://) หรือผ่าน Web Server ก็ใช้งานได้สะดวกรวดเร็ว</p>
+    </div>
+  </div>
+
+  <!-- 2. PROFILE SETUP MODAL -->
+  <div id="profileModal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full space-y-5">
+      <div class="text-center">
+        <h3 id="profileModalTitle" class="text-lg font-bold text-slate-800">👤 ตั้งค่าโปรไฟล์ในบอร์ด</h3>
+        <p class="text-xs text-slate-500 mt-1">กำหนดชื่อและตำแหน่งที่ต้องการให้เพื่อนร่วมทีมเห็น</p>
+      </div>
+
+      <form onsubmit="saveProfile(event)" class="space-y-4 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">ชื่อเล่น / ชื่อที่ใช้ในบอร์ด <span class="text-rose-500">*</span></label>
+          <input type="text" id="profileNickname" required placeholder="เช่น โอม, พี่เอก, ฝ่าย IT" class="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:border-indigo-600">
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">ฝ่าย / บทบาท</label>
+          <input type="text" id="profileRole" placeholder="เช่น Sales, IT, Dev, Admin" class="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:border-indigo-600">
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">สีประจำตัวของคุณ</label>
+          <div class="flex items-center gap-2 pt-1" id="profileColorPicker">
+            <label class="cursor-pointer"><input type="radio" name="userColor" value="#4f46e5" class="sr-only peer" checked><span class="block w-7 h-7 rounded-full bg-indigo-600 border-2 border-transparent peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-indigo-600"></span></label>
+            <label class="cursor-pointer"><input type="radio" name="userColor" value="#059669" class="sr-only peer"><span class="block w-7 h-7 rounded-full bg-emerald-600 border-2 border-transparent peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-emerald-600"></span></label>
+            <label class="cursor-pointer"><input type="radio" name="userColor" value="#d97706" class="sr-only peer"><span class="block w-7 h-7 rounded-full bg-amber-600 border-2 border-transparent peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-amber-600"></span></label>
+            <label class="cursor-pointer"><input type="radio" name="userColor" value="#dc2626" class="sr-only peer"><span class="block w-7 h-7 rounded-full bg-rose-600 border-2 border-transparent peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-rose-600"></span></label>
+            <label class="cursor-pointer"><input type="radio" name="userColor" value="#7c3aed" class="sr-only peer"><span class="block w-7 h-7 rounded-full bg-purple-600 border-2 border-transparent peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-purple-600"></span></label>
+            <label class="cursor-pointer"><input type="radio" name="userColor" value="#0891b2" class="sr-only peer"><span class="block w-7 h-7 rounded-full bg-cyan-600 border-2 border-transparent peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-cyan-600"></span></label>
+          </div>
+        </div>
+
+        <div class="pt-2 flex justify-end gap-2 border-t border-slate-100">
+          <button type="button" id="cancelProfileBtn" onclick="closeProfileModal()" class="hidden px-3.5 py-2 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 font-medium">ยกเลิก</button>
+          <button type="submit" class="w-full py-2.5 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition shadow-sm">เข้าสู่กระดาน</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 3. TOP APP BAR -->
+  <header class="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shrink-0 shadow-sm z-30">
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2">
+        <span class="text-2xl">📌</span>
+        <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Team Canvas</h1>
+      </div>
+      <div id="connectionStatus" class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+        <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> รอเชื่อมต่อ...
+      </div>
+    </div>
+
+    <div class="flex items-center gap-5">
+      <div class="flex items-center gap-2 text-xs font-medium bg-slate-50 border border-slate-200 rounded-lg p-1.5 px-3">
+        <span>เหลืองาน: <strong id="pendingCount" class="text-indigo-600 font-bold">0</strong></span>
+        <span class="text-slate-300">|</span>
+        <span>กำลังทำ: <strong id="progressCount" class="text-amber-600 font-bold">0</strong></span>
+        <span class="text-slate-300">|</span>
+        <span>เสร็จสิ้น: <strong id="doneCount" class="text-emerald-600 font-bold">0</strong></span>
+      </div>
+
+      <div class="flex bg-slate-200 p-0.5 rounded-lg text-xs font-medium">
+        <button id="viewBoardBtn" onclick="switchView('kanban')" class="px-3 py-1.5 rounded-md transition-all bg-white shadow text-slate-800">คอลัมน์ (Kanban)</button>
+        <button id="viewCanvasBtn" onclick="switchView('canvas')" class="px-3 py-1.5 rounded-md transition-all text-slate-600 hover:text-slate-900">กระดานอิสระ (Canva)</button>
+      </div>
+
+      <button onclick="createNewNotePrompt()" class="flex items-center gap-1 text-xs font-semibold px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm transition active:scale-95">
+        ➕ แปะโน้ตงานใหม่
+      </button>
+
+      <div class="flex items-center gap-2.5 pl-3 border-l border-slate-200">
+        <button onclick="openEditProfileModal()" title="แก้ไขโปรไฟล์ของคุณ" class="flex items-center gap-2 hover:opacity-80 transition text-left">
+          <div id="userAvatar" class="w-8 h-8 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center overflow-hidden border border-slate-300 shadow-sm">
+            ?
+          </div>
+          <div>
+            <div id="userName" class="text-xs font-semibold text-slate-800 leading-tight">...</div>
+            <div id="userRoleBadge" class="text-[10px] text-slate-400 leading-tight">...</div>
+          </div>
+        </button>
+        <button onclick="handleLogout()" title="ออกจากระบบ" class="text-slate-400 hover:text-rose-600 text-sm ml-2 font-bold transition">
+          ✕
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 4. FILTER BAR -->
+  <div class="bg-white/80 backdrop-blur border-b border-slate-200 px-6 py-2 flex items-center justify-between shrink-0 text-xs">
+    <div class="flex items-center gap-2 overflow-x-auto py-1 max-w-[70%]" id="memberFilterList">
+      <span class="text-slate-400 font-medium whitespace-nowrap">กรองดูงาน:</span>
+      <button onclick="setFilter('all')" id="filter-all" class="px-2.5 py-1 rounded-full font-medium bg-indigo-100 text-indigo-700 border border-indigo-200 whitespace-nowrap">ทั้งหมด</button>
+    </div>
+    <div class="flex items-center gap-2">
+      <input type="text" id="searchInput" oninput="renderApp()" placeholder="🔍 ค้นหางาน / #แท็ก..." class="border border-slate-300 rounded-md px-2.5 py-1 text-xs focus:outline-none focus:border-indigo-500 w-48">
+    </div>
+  </div>
+
+  <!-- 5. WORKSPACE CONTAINER -->
+  <main class="flex-1 relative overflow-hidden">
+    <!-- VIEW A: KANBAN -->
+    <div id="kanbanContainer" class="h-full overflow-x-auto p-6 flex gap-6">
+      <div class="flex-1 min-w-[280px] max-w-sm flex flex-col bg-slate-200/70 rounded-xl border border-slate-300/60 p-3" ondragover="allowDrop(event)" ondrop="handleDrop(event, 'todo')">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <span class="font-bold text-slate-700 text-sm flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> ต้องทำ (To-Do)</span>
+          <span id="badge-todo" class="text-xs bg-slate-300 font-semibold px-2 py-0.5 rounded-full text-slate-700">0</span>
+        </div>
+        <div id="col-todo" class="flex-1 overflow-y-auto space-y-3.5 pr-1 min-h-[200px]" ondragover="allowDrop(event)" ondrop="handleDrop(event, 'todo')"></div>
+      </div>
+
+      <div class="flex-1 min-w-[280px] max-w-sm flex flex-col bg-slate-200/70 rounded-xl border border-slate-300/60 p-3" ondragover="allowDrop(event)" ondrop="handleDrop(event, 'doing')">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <span class="font-bold text-slate-700 text-sm flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> กำลังทำ (In Progress)</span>
+          <span id="badge-doing" class="text-xs bg-slate-300 font-semibold px-2 py-0.5 rounded-full text-slate-700">0</span>
+        </div>
+        <div id="col-doing" class="flex-1 overflow-y-auto space-y-3.5 pr-1 min-h-[200px]" ondragover="allowDrop(event)" ondrop="handleDrop(event, 'doing')"></div>
+      </div>
+
+      <div class="flex-1 min-w-[280px] max-w-sm flex flex-col bg-slate-200/70 rounded-xl border border-slate-300/60 p-3" ondragover="allowDrop(event)" ondrop="handleDrop(event, 'review')">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <span class="font-bold text-slate-700 text-sm flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> รอตรวจทาน / ติดขัด</span>
+          <span id="badge-review" class="text-xs bg-slate-300 font-semibold px-2 py-0.5 rounded-full text-slate-700">0</span>
+        </div>
+        <div id="col-review" class="flex-1 overflow-y-auto space-y-3.5 pr-1 min-h-[200px]" ondragover="allowDrop(event)" ondrop="handleDrop(event, 'review')"></div>
+      </div>
+
+      <div class="flex-1 min-w-[280px] max-w-sm flex flex-col bg-slate-200/70 rounded-xl border border-slate-300/60 p-3" ondragover="allowDrop(event)" ondrop="handleDrop(event, 'done')">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <span class="font-bold text-slate-700 text-sm flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> เสร็จแล้ว (Done)</span>
+          <span id="badge-done" class="text-xs bg-slate-300 font-semibold px-2 py-0.5 rounded-full text-slate-700">0</span>
+        </div>
+        <div id="col-done" class="flex-1 overflow-y-auto space-y-3.5 pr-1 min-h-[200px]" ondragover="allowDrop(event)" ondrop="handleDrop(event, 'done')"></div>
+      </div>
+    </div>
+
+    <!-- VIEW B: FREEFORM CANVAS -->
+    <div id="canvasContainer" class="hidden h-full w-full relative overflow-auto canvas-bg" ondblclick="handleCanvasDoubleClick(event)">
+      <div class="absolute top-3 left-4 bg-white/90 backdrop-blur border border-slate-300 rounded-md px-3 py-1.5 text-xs text-slate-600 shadow-sm pointer-events-none z-10">
+        💡 ดับเบิลคลิกบนที่ว่างเพื่อแปะโน้ตด่วน | ลากโน้ตไปวางตำแหน่งใดก็ได้
+      </div>
+      <div id="canvasSurface" class="relative w-[3200px] h-[2400px]"></div>
+    </div>
+  </main>
+
+  <!-- 6. NOTE MODAL -->
+  <div id="noteModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col">
+      <div class="px-5 py-3.5 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+        <h3 id="modalTitle" class="font-bold text-slate-800 text-sm">📝 รายละเอียดโน้ตงาน</h3>
+        <button onclick="closeNoteModal()" class="text-slate-400 hover:text-slate-600 text-lg">×</button>
+      </div>
+      <form id="noteForm" onsubmit="saveNote(event)" class="p-5 space-y-3.5 text-xs">
+        <input type="hidden" id="noteId">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">ชื่องาน / รายละเอียด</label>
+          <textarea id="noteText" rows="3" required placeholder="เขียนรายละเอียดงาน เช่น ติดตามสั่งซื้อ #PO ส่งเอกสาร #PR หรือพิมพ์ #แท็ก..." class="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:border-indigo-600"></textarea>
+          
+          <!-- Quick Hashtag Insertion Buttons -->
+          <div class="mt-2.5 p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+            <div class="text-[11px] text-slate-500 font-semibold mb-2 flex items-center justify-between">
+              <span class="flex items-center gap-1"><span>🏷️</span> คลิกเพื่อใส่แท็กในงาน:</span>
+              <span class="text-[10px] text-slate-400 font-normal">คลิกซ้ำได้ พิมพ์เองก็ได้</span>
+            </div>
+            <div class="flex flex-wrap gap-1.5">
+              <button type="button" onclick="insertTag('#ใบเสนอราคา')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-blue-100 hover:bg-blue-200 text-blue-900 border border-blue-300 text-[11px] font-semibold transition active:scale-95 shadow-xs">
+                <span>📋</span> #ใบเสนอราคา
+              </button>
+              <button type="button" onclick="insertTag('#เอกสาร')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-teal-100 hover:bg-teal-200 text-teal-900 border border-teal-300 text-[11px] font-semibold transition active:scale-95 shadow-xs">
+                <span>📄</span> #เอกสาร
+              </button>
+              <button type="button" onclick="insertTag('#POC')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-300 text-[11px] font-semibold transition active:scale-95 shadow-xs">
+                <span>🧪</span> #POC
+              </button>
+              <button type="button" onclick="insertTag('#ลูกค้า')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300 text-[11px] font-semibold transition active:scale-95 shadow-xs">
+                <span>🤝</span> #ลูกค้า
+              </button>
+              <button type="button" onclick="insertTag('#PO')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-[11px] font-semibold transition active:scale-95 shadow-xs">
+                <span>📦</span> #PO
+              </button>
+              <button type="button" onclick="insertTag('#ด่วน')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300 text-[11px] font-semibold transition active:scale-95 shadow-xs">
+                <span>🔥</span> #ด่วน
+              </button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">ผู้รับผิดชอบ</label>
+          <select id="noteAssignee" class="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:border-indigo-600">
+            <option value="">-- ไม่ระบุ (ทุกคนช่วยได้) --</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">สถานะ</label>
+            <select id="noteStatus" class="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:border-indigo-600">
+              <option value="todo">ต้องทำ (To-Do)</option>
+              <option value="doing">กำลังทำ (In Progress)</option>
+              <option value="review">รอตรวจ / ติดขัด</option>
+              <option value="done">เสร็จสิ้น (Done)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">สีโพสต์อิท</label>
+            <div class="flex items-center gap-1.5 pt-1.5">
+              <label class="cursor-pointer"><input type="radio" name="noteColor" value="yellow" class="sr-only peer" checked><span class="block w-6 h-6 rounded-full bg-amber-200 border-2 border-transparent peer-checked:border-slate-800"></span></label>
+              <label class="cursor-pointer"><input type="radio" name="noteColor" value="blue" class="sr-only peer"><span class="block w-6 h-6 rounded-full bg-sky-200 border-2 border-transparent peer-checked:border-slate-800"></span></label>
+              <label class="cursor-pointer"><input type="radio" name="noteColor" value="green" class="sr-only peer"><span class="block w-6 h-6 rounded-full bg-emerald-200 border-2 border-transparent peer-checked:border-slate-800"></span></label>
+              <label class="cursor-pointer"><input type="radio" name="noteColor" value="pink" class="sr-only peer"><span class="block w-6 h-6 rounded-full bg-rose-200 border-2 border-transparent peer-checked:border-slate-800"></span></label>
+              <label class="cursor-pointer"><input type="radio" name="noteColor" value="purple" class="sr-only peer"><span class="block w-6 h-6 rounded-full bg-purple-200 border-2 border-transparent peer-checked:border-slate-800"></span></label>
+            </div>
+          </div>
+        </div>
+        <div class="pt-2 flex justify-end gap-2 border-t border-slate-100">
+          <button type="button" onclick="closeNoteModal()" class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 font-medium">ยกเลิก</button>
+          <button type="submit" class="px-4 py-1.5 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 shadow-sm">บันทึก</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // ------------------------------------------------------------------------
+    // FIREBASE CONFIG
+    // ------------------------------------------------------------------------
+    const firebaseConfig = {
+      apiKey: "AIzaSyCEsZ8_ZRYuixmCL-LGiCWR2hw7bLNynHw",
+      authDomain: "team-taskboard-digital.firebaseapp.com",
+      databaseURL: "https://team-taskboard-digital-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "team-taskboard-digital",
+      storageBucket: "team-taskboard-digital.firebasestorage.app",
+      messagingSenderId: "878658670029",
+      appId: "1:878658670029:web:88da1d69d69d08b9c94884",
+      measurementId: "G-7QE7SCWLSS"
+    };
+
+    let db = null;
+    let auth = null;
+    let currentUser = null;
+    let isFirebaseReady = false;
+
+    try {
+      if (typeof firebase !== 'undefined') {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
+        auth = firebase.auth();
+        isFirebaseReady = true;
+      }
+    } catch (e) {
+      console.warn("Firebase initialize error:", e);
+    }
+
+    let tasks = {};
+    let members = {};
+    let currentView = 'kanban';
+    let currentFilter = 'all';
+    let activeDragTaskId = null;
+
+    const COLOR_THEMES = {
+      yellow: { bg: 'bg-amber-100', border: 'border-amber-300', text: 'text-amber-950', tape: 'bg-amber-200/70' },
+      blue: { bg: 'bg-sky-100', border: 'border-sky-300', text: 'text-sky-950', tape: 'bg-sky-200/70' },
+      green: { bg: 'bg-emerald-100', border: 'border-emerald-300', text: 'text-emerald-950', tape: 'bg-emerald-200/70' },
+      pink: { bg: 'bg-rose-100', border: 'border-rose-300', text: 'text-rose-950', tape: 'bg-rose-200/70' },
+      purple: { bg: 'bg-purple-100', border: 'border-purple-300', text: 'text-purple-950', tape: 'bg-purple-200/70' },
+    };
+
+    // ------------------------------------------------------------------------
+    // HASHTAG & ICON CONFIGURATION
+    // ------------------------------------------------------------------------
+    const TAG_CONFIG = {
+      // 1. งานตามคำขอหลักของพี่โอม
+      '#ใบเสนอราคา': { icon: '📋', color: 'bg-blue-100 text-blue-900 border-blue-300 font-bold' },
+      '#QT': { icon: '📋', color: 'bg-blue-100 text-blue-900 border-blue-300 font-bold' },
+      '#QUOTATION': { icon: '📋', color: 'bg-blue-100 text-blue-900 border-blue-300 font-bold' },
+      '#เอกสาร': { icon: '📄', color: 'bg-teal-100 text-teal-900 border-teal-300 font-bold' },
+      '#DOC': { icon: '📄', color: 'bg-teal-100 text-teal-900 border-teal-300 font-bold' },
+      '#POC': { icon: '🧪', color: 'bg-purple-100 text-purple-900 border-purple-300 font-bold' },
+      '#ลูกค้า': { icon: '🤝', color: 'bg-emerald-100 text-emerald-900 border-emerald-300 font-bold' },
+      '#CLIENT': { icon: '🤝', color: 'bg-emerald-100 text-emerald-900 border-emerald-300 font-bold' },
+      '#PO': { icon: '📦', color: 'bg-amber-100 text-amber-900 border-amber-300 font-bold' },
+      '#ลูกค้าPO': { icon: '🤝📦', color: 'bg-indigo-100 text-indigo-900 border-indigo-300 font-bold' },
+
+      // 2. งานอื่นๆ ที่เกี่ยวข้อง
+      '#PR': { icon: '📑', color: 'bg-orange-100 text-orange-900 border-orange-300 font-bold' },
+      '#URGENT': { icon: '🔥', color: 'bg-rose-100 text-rose-900 border-rose-300 font-bold' },
+      '#ด่วน': { icon: '🔥', color: 'bg-rose-100 text-rose-900 border-rose-300 font-bold' },
+      '#BUG': { icon: '🐛', color: 'bg-red-100 text-red-900 border-red-300 font-semibold' },
+      '#DEV': { icon: '💻', color: 'bg-sky-100 text-sky-900 border-sky-300 font-semibold' },
+      '#IT': { icon: '🖥️', color: 'bg-blue-100 text-blue-900 border-blue-300 font-semibold' },
+      '#DESIGN': { icon: '🎨', color: 'bg-pink-100 text-pink-900 border-pink-300 font-semibold' },
+      '#MEETING': { icon: '📅', color: 'bg-purple-100 text-purple-900 border-purple-300 font-semibold' },
+      '#ประชุม': { icon: '📅', color: 'bg-purple-100 text-purple-900 border-purple-300 font-semibold' },
+      '#BILL': { icon: '💵', color: 'bg-emerald-100 text-emerald-900 border-emerald-300 font-semibold' },
+      '#การเงิน': { icon: '💵', color: 'bg-emerald-100 text-emerald-900 border-emerald-300 font-semibold' },
+      '#อนุมัติ': { icon: '✅', color: 'bg-emerald-100 text-emerald-900 border-emerald-300 font-semibold' },
+      '#WAIT': { icon: '⏳', color: 'bg-slate-200 text-slate-800 border-slate-300 font-semibold' },
+      '#รอ': { icon: '⏳', color: 'bg-slate-200 text-slate-800 border-slate-300 font-semibold' }
+    };
+
+    function extractTags(text) {
+      return (text || '').match(/#[\w\u0E00-\u0E7F]+/g) || [];
+    }
+
+    function getTagInfo(tag) {
+      const upper = (tag || '').toUpperCase();
+      if (TAG_CONFIG[upper]) {
+        return { tag, icon: TAG_CONFIG[upper].icon, class: TAG_CONFIG[upper].color };
+      }
+      return { tag, icon: '🏷️', class: 'bg-white/80 text-slate-700 border-slate-300/80 font-semibold' };
+    }
+
+    function renderTagBadgesHTML(text) {
+      const tags = extractTags(text);
+      if (!tags.length) return '';
+      return `
+        <div class="flex flex-wrap gap-1.5 my-1.5">
+          ${tags.map(t => {
+            const info = getTagInfo(t);
+            return `<span onclick="event.stopPropagation(); setFilter('${escapeHTML(t)}')" title="คลิกเพื่อกรองงานเฉพาะแท็ก ${escapeHTML(t)}" class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] border shadow-xs cursor-pointer hover:scale-105 transition-transform ${info.class}">
+              <span>${info.icon}</span>
+              <span>${escapeHTML(t)}</span>
+            </span>`;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    function insertTag(tag) {
+      const textarea = document.getElementById('noteText');
+      const current = textarea.value.trim();
+      if (current.includes(tag)) {
+        textarea.focus();
+        return;
+      }
+      textarea.value = current ? `${current} ${tag}` : tag;
+      textarea.focus();
+    }
+
+    function getActiveTags() {
+      const set = new Set();
+      Object.values(tasks).forEach(t => {
+        const found = extractTags(t.title);
+        found.forEach(tag => set.add(tag));
+      });
+      return Array.from(set);
+    }
+
+    // ------------------------------------------------------------------------
+    // AUTH & ONBOARDING FLOW
+    // ------------------------------------------------------------------------
+    function initAuth() {
+      // Load local tasks and user if available
+      try {
+        const localTasks = localStorage.getItem('team_canvas_tasks');
+        if (localTasks) tasks = JSON.parse(localTasks);
+      } catch (e) {}
+
+      try {
+        const savedUser = localStorage.getItem('team_canvas_current_user');
+        if (savedUser) {
+          currentUser = JSON.parse(savedUser);
+          members[currentUser.id] = currentUser;
+        }
+      } catch (e) {}
+
+      if (!isFirebaseReady) {
+        updateConnectionStatus(false);
+        if (currentUser) {
+          document.getElementById('authScreen').classList.add('hidden');
+          onUserReady();
+        }
+        return;
+      }
+
+      // Check Firebase Auth
+      auth.onAuthStateChanged((user) => {
+        if (user) {
+          document.getElementById('authScreen').classList.add('hidden');
+          db.ref(`members/${user.uid}`).once('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data && data.nickname) {
+              currentUser = data;
+              try { localStorage.setItem('team_canvas_current_user', JSON.stringify(currentUser)); } catch (e) {}
+              onUserReady();
+            } else {
+              promptProfileSetup(user);
+            }
+          });
+        } else if (currentUser) {
+          // Stay logged in if guest user
+          document.getElementById('authScreen').classList.add('hidden');
+          onUserReady();
+        } else {
+          document.getElementById('authScreen').classList.remove('hidden');
+        }
+      });
+    }
+
+    function updateConnectionStatus(online = true) {
+      const statusEl = document.getElementById('connectionStatus');
+      if (!statusEl) return;
+      if (online) {
+        statusEl.className = "flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-200";
+        statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span> ออนไลน์ (Realtime)';
+      } else {
+        statusEl.className = "flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-200 text-slate-700 border border-slate-300";
+        statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-500"></span> โหมดออฟไลน์ (Local)';
+      }
+    }
+
+    function loginWithGoogle() {
+      if (!isFirebaseReady) {
+        alert("Firebase ยังไม่พร้อมใช้งาน ระบบจะให้คุณเข้าใช้งานด้วยโหมดระบุชื่อเล่นแทน");
+        loginAsGuestPrompt();
+        return;
+      }
+
+      // Check if running on file:// protocol
+      if (window.location.protocol === 'file:') {
+        const proceedGuest = confirm(
+          "⚠️ ข้อจำกัดด้านความปลอดภัยของ Google:\n" +
+          "การเปิดไฟล์ HTML ผ่านโปรโตคอล file:// โดยตรง จะไม่สามารถเชื่อมต่อ Google OAuth Popup ได้\n\n" +
+          "ต้องการกด 'ตกลง' เพื่อเข้าใช้งานทันทีด้วยการใส่ชื่อเล่น (Guest Mode) หรือไม่?\n" +
+          "(หรือรันผ่าน Web Server: เช่น python3 -m http.server เพื่อใช้ Google Login)"
+        );
+        if (proceedGuest) {
+          loginAsGuestPrompt();
+        }
+        return;
+      }
+
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider).catch(err => {
+        console.error("Sign-in error:", err);
+        if (err.code === 'auth/operation-not-supported-in-this-environment') {
+          alert("บราวเซอร์ไม่อนุญาตให้ล็อกอิน Google ในสภาพแวดล้อมนี้ กำลังเปิดโหมดใส่ชื่อเล่นให้แทนครับ");
+          loginAsGuestPrompt();
+        } else {
+          alert("เข้าสู่ระบบไม่สำเร็จ: " + err.message);
+        }
+      });
+    }
+
+    function loginAsGuestPrompt() {
+      const guestId = 'guest_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
+      promptProfileSetup({
+        uid: guestId,
+        displayName: 'พี่โอม',
+        email: ''
+      });
+    }
+
+    function promptProfileSetup(user) {
+      window.pendingAuthUser = user;
+      document.getElementById('authScreen').classList.add('hidden');
+      document.getElementById('profileNickname').value = user.displayName || user.name || '';
+      document.getElementById('profileRole').value = '';
+      document.getElementById('cancelProfileBtn').classList.add('hidden');
+      document.getElementById('profileModal').classList.remove('hidden');
+      setTimeout(() => {
+        const inp = document.getElementById('profileNickname');
+        if (inp) inp.focus();
+      }, 100);
+    }
+
+    function openEditProfileModal() {
+      if (!currentUser) return;
+      document.getElementById('profileNickname').value = currentUser.nickname || currentUser.name || '';
+      document.getElementById('profileRole').value = currentUser.role || '';
+      const colorRadio = document.querySelector(`input[name="userColor"][value="${currentUser.color}"]`);
+      if (colorRadio) colorRadio.checked = true;
+      document.getElementById('cancelProfileBtn').classList.remove('hidden');
+      document.getElementById('profileModal').classList.remove('hidden');
+    }
+
+    function closeProfileModal() {
+      document.getElementById('profileModal').classList.add('hidden');
+      if (!currentUser) {
+        document.getElementById('authScreen').classList.remove('hidden');
+      }
+    }
+
+    function saveProfile(e) {
+      e.preventDefault();
+      const nickname = document.getElementById('profileNickname').value.trim();
+      const role = document.getElementById('profileRole').value.trim();
+      const colorRadio = document.querySelector('input[name="userColor"]:checked');
+      const color = colorRadio ? colorRadio.value : '#4f46e5';
+      if (!nickname) return;
+
+      const baseUser = currentUser || window.pendingAuthUser || {};
+      const uid = baseUser.uid || baseUser.id || ('user_' + Date.now());
+
+      currentUser = {
+        id: uid,
+        email: baseUser.email || '',
+        name: baseUser.displayName || baseUser.name || nickname,
+        nickname: nickname,
+        role: role || 'Member',
+        color: color,
+        photo: baseUser.photoURL || baseUser.photo || null,
+        lastActive: Date.now()
+      };
+
+      try {
+        localStorage.setItem('team_canvas_current_user', JSON.stringify(currentUser));
+      } catch (err) {}
+
+      members[uid] = currentUser;
+
+      if (isFirebaseReady) {
+        db.ref(`members/${uid}`).set(currentUser).then(() => {
+          closeProfileModal();
+          onUserReady();
+        }).catch(err => {
+          console.warn("Save profile to Firebase warning:", err);
+          closeProfileModal();
+          onUserReady();
+        });
+      } else {
+        closeProfileModal();
+        onUserReady();
+      }
+    }
+
+    function handleLogout() {
+      try {
+        localStorage.removeItem('team_canvas_current_user');
+      } catch (e) {}
+      currentUser = null;
+      if (isFirebaseReady && auth && auth.currentUser) {
+        auth.signOut().then(() => {
+          document.getElementById('authScreen').classList.remove('hidden');
+        }).catch(() => {
+          document.getElementById('authScreen').classList.remove('hidden');
+        });
+      } else {
+        document.getElementById('authScreen').classList.remove('hidden');
+      }
+    }
+
+    function onUserReady() {
+      document.getElementById('userName').textContent = currentUser.nickname || 'ผู้ใช้งาน';
+      document.getElementById('userRoleBadge').textContent = currentUser.role || 'Member';
+
+      const avatarEl = document.getElementById('userAvatar');
+      if (currentUser.photo) {
+        avatarEl.innerHTML = `<img src="${currentUser.photo}" class="w-full h-full object-cover">`;
+      } else {
+        avatarEl.textContent = (currentUser.nickname || '?').charAt(0).toUpperCase();
+        avatarEl.style.backgroundColor = currentUser.color || '#4f46e5';
+      }
+
+      startRealtimeSync();
+    }
+
+    // ------------------------------------------------------------------------
+    // DATABASE SYNC
+    // ------------------------------------------------------------------------
+    function startRealtimeSync() {
+      if (isFirebaseReady) {
+        updateConnectionStatus(true);
+
+        db.ref('tasks').on('value', (snap) => {
+          const val = snap.val();
+          if (val) {
+            tasks = val;
+            try { localStorage.setItem('team_canvas_tasks', JSON.stringify(tasks)); } catch (e) {}
+          } else {
+            tasks = {};
+          }
+          renderMembersUI();
+          renderApp();
+        });
+
+        db.ref('members').on('value', (snap) => {
+          const val = snap.val();
+          if (val) {
+            members = Object.assign({}, members, val);
+          }
+          renderMembersUI();
+          renderApp();
+        });
+      } else {
+        updateConnectionStatus(false);
+        renderMembersUI();
+        renderApp();
+      }
+    }
+
+    function saveTaskToDB(taskData) {
+      tasks[taskData.id] = taskData;
+      try { localStorage.setItem('team_canvas_tasks', JSON.stringify(tasks)); } catch (e) {}
+      renderMembersUI();
+      renderApp();
+
+      if (isFirebaseReady) {
+        db.ref(`tasks/${taskData.id}`).set(taskData).catch(err => {
+          console.warn("Firebase task sync warning:", err);
+        });
+      }
+    }
+
+    function deleteTask(id) {
+      if (!confirm('ต้องการลบโน้ตนี้ใช่หรือไม่?')) return;
+      delete tasks[id];
+      try { localStorage.setItem('team_canvas_tasks', JSON.stringify(tasks)); } catch (e) {}
+      renderMembersUI();
+      renderApp();
+
+      if (isFirebaseReady) {
+        db.ref(`tasks/${id}`).remove().catch(err => {
+          console.warn("Firebase remove warning:", err);
+        });
+      }
+    }
+
+    function updateTaskStatus(id, newStatus) {
+      if (tasks[id]) {
+        tasks[id].status = newStatus;
+        try { localStorage.setItem('team_canvas_tasks', JSON.stringify(tasks)); } catch (e) {}
+        renderApp();
+      }
+      if (isFirebaseReady) {
+        db.ref(`tasks/${id}/status`).set(newStatus).catch(err => {
+          console.warn("Firebase status update warning:", err);
+        });
+      }
+    }
+
+    function updateTaskPosition(id, x, y) {
+      if (tasks[id]) {
+        tasks[id].x = x;
+        tasks[id].y = y;
+        try { localStorage.setItem('team_canvas_tasks', JSON.stringify(tasks)); } catch (e) {}
+      }
+      if (isFirebaseReady) {
+        db.ref(`tasks/${id}`).update({ x, y }).catch(err => {
+          console.warn("Firebase position update warning:", err);
+        });
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // UI RENDERING
+    // ------------------------------------------------------------------------
+    function renderApp() {
+      const q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+      const filteredList = Object.values(tasks).filter(task => {
+        const matchQuery = (task.title || '').toLowerCase().includes(q);
+        let matchFilter = true;
+        if (currentFilter !== 'all') {
+          if (currentFilter.startsWith('#')) {
+            matchFilter = (task.title || '').toUpperCase().includes(currentFilter.toUpperCase());
+          } else {
+            matchFilter = task.assignee === currentFilter;
+          }
+        }
+        return matchQuery && matchFilter;
+      });
+
+      let todo = 0, doing = 0, review = 0, done = 0;
+      Object.values(tasks).forEach(t => {
+        if (t.status === 'todo') todo++;
+        else if (t.status === 'doing') doing++;
+        else if (t.status === 'review') review++;
+        else if (t.status === 'done') done++;
+      });
+
+      document.getElementById('pendingCount').textContent = todo;
+      document.getElementById('progressCount').textContent = doing;
+      document.getElementById('doneCount').textContent = done;
+
+      document.getElementById('badge-todo').textContent = todo;
+      document.getElementById('badge-doing').textContent = doing;
+      document.getElementById('badge-review').textContent = review;
+      document.getElementById('badge-done').textContent = done;
+
+      if (currentView === 'kanban') {
+        renderKanban(filteredList);
+      } else {
+        renderCanvas(filteredList);
+      }
+    }
+
+    function renderKanban(taskList) {
+      ['todo', 'doing', 'review', 'done'].forEach(col => {
+        const colEl = document.getElementById(`col-${col}`);
+        if (colEl) colEl.innerHTML = '';
+      });
+
+      taskList.forEach(task => {
+        const theme = COLOR_THEMES[task.color] || COLOR_THEMES.yellow;
+        const assignee = members[task.assignee];
+        const card = document.createElement('div');
+        card.draggable = true;
+        card.ondragstart = (e) => handleDragStart(e, task.id);
+        card.className = `sticky-note p-3.5 rounded-lg border cursor-grab active:cursor-grabbing ${theme.bg} ${theme.border} ${theme.text}`;
+        card.innerHTML = `
+          <div class="flex justify-between items-center mb-1.5">
+            <span class="text-sm select-none opacity-85 hover:scale-110 transition-transform cursor-default" title="ปักหมุด">📌</span>
+            <div class="flex items-center gap-1.5">
+              <button onclick="editNote('${task.id}')" title="แก้ไข" class="opacity-60 hover:opacity-100 text-xs">✏️</button>
+              <button onclick="deleteTask('${task.id}')" title="ลบ" class="opacity-60 hover:opacity-100 text-xs">✕</button>
+            </div>
+          </div>
+          ${renderTagBadgesHTML(task.title)}
+          <p class="handwriting text-sm font-medium leading-relaxed mb-3 whitespace-pre-wrap">${escapeHTML(task.title)}</p>
+          <div class="flex items-center justify-between pt-1 border-t border-black/10 text-[11px]">
+            ${assignee ? `
+              <div class="flex items-center gap-1.5">
+                <span class="w-5 h-5 rounded-full text-white flex items-center justify-center font-bold text-[10px] overflow-hidden" style="background:${assignee.color || '#4f46e5'}">
+                  ${assignee.photo ? `<img src="${assignee.photo}" class="w-full h-full object-cover">` : (assignee.nickname || assignee.name || '?').charAt(0)}
+                </span>
+                <span class="font-medium">${escapeHTML(assignee.nickname || assignee.name)}</span>
+              </div>
+            ` : '<span class="opacity-40 italic">ไม่ระบุ</span>'}
+            <span class="opacity-50 text-[10px] uppercase font-semibold">${task.color}</span>
+          </div>
+        `;
+        const colEl = document.getElementById(`col-${task.status}`);
+        if (colEl) colEl.appendChild(card);
+      });
+    }
+
+    function renderCanvas(taskList) {
+      const surface = document.getElementById('canvasSurface');
+      if (!surface) return;
+      surface.innerHTML = '';
+
+      taskList.forEach(task => {
+        const theme = COLOR_THEMES[task.color] || COLOR_THEMES.yellow;
+        const assignee = members[task.assignee];
+        const note = document.createElement('div');
+        note.id = `canvas-note-${task.id}`;
+        note.className = `sticky-note absolute p-4 rounded-md border w-56 cursor-move select-none ${theme.bg} ${theme.border} ${theme.text}`;
+        note.style.left = `${task.x || 100}px`;
+        note.style.top = `${task.y || 100}px`;
+        note.style.transform = `rotate(${task.rotation || 0}deg)`;
+        
+        note.innerHTML = `
+          <div class="flex justify-between items-center mb-1.5 -mt-1">
+            <span class="text-sm select-none opacity-85 hover:scale-110 transition-transform cursor-default" title="ปักหมุด">📌</span>
+            <div class="flex items-center gap-1.5">
+              <button onclick="editNote('${task.id}')" title="แก้ไข" class="opacity-60 hover:opacity-100 text-xs">✏️</button>
+              <button onclick="deleteTask('${task.id}')" title="ลบ" class="opacity-60 hover:opacity-100 text-xs">✕</button>
+            </div>
+          </div>
+          ${renderTagBadgesHTML(task.title)}
+          <p class="handwriting text-sm leading-relaxed mb-3 whitespace-pre-wrap">${escapeHTML(task.title)}</p>
+          <div class="flex items-center justify-between pt-2 border-t border-black/10 text-[11px]">
+            ${assignee ? `
+              <span class="inline-flex items-center gap-1.5 font-semibold">
+                <span class="w-4 h-4 rounded-full text-white text-[9px] flex items-center justify-center overflow-hidden" style="background:${assignee.color || '#4f46e5'}">
+                  ${assignee.photo ? `<img src="${assignee.photo}" class="w-full h-full object-cover">` : (assignee.nickname || assignee.name || '?').charAt(0)}
+                </span>
+                ${escapeHTML(assignee.nickname || assignee.name)}
+              </span>
+            ` : '<span class="opacity-40 italic">ไม่ระบุ</span>'}
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/10">${(task.status || 'todo').toUpperCase()}</span>
+          </div>
+        `;
+
+        enableCanvasDrag(note, task.id);
+        surface.appendChild(note);
+      });
+    }
+
+    // ------------------------------------------------------------------------
+    // DRAG AND DROP
+    // ------------------------------------------------------------------------
+    function handleDragStart(e, id) {
+      activeDragTaskId = id;
+      e.dataTransfer.setData('text/plain', id);
+    }
+    function allowDrop(e) { e.preventDefault(); }
+    function handleDrop(e, targetStatus) {
+      e.preventDefault();
+      const id = activeDragTaskId || e.dataTransfer.getData('text/plain');
+      if (id && tasks[id]) updateTaskStatus(id, targetStatus);
+    }
+
+    function enableCanvasDrag(element, taskId) {
+      let startX, startY, origX, origY;
+      element.onmousedown = function(e) {
+        if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || (e.target.closest && e.target.closest('button')) || (e.target.closest && e.target.closest('.cursor-pointer'))) return;
+        startX = e.clientX;
+        startY = e.clientY;
+        origX = parseInt(element.style.left) || 0;
+        origY = parseInt(element.style.top) || 0;
+        element.style.zIndex = 50;
+
+        document.onmousemove = function(ev) {
+          element.style.left = (origX + (ev.clientX - startX)) + 'px';
+          element.style.top = (origY + (ev.clientY - startY)) + 'px';
+        };
+
+        document.onmouseup = function() {
+          document.onmousemove = null;
+          document.onmouseup = null;
+          element.style.zIndex = '';
+          updateTaskPosition(taskId, parseInt(element.style.left) || 0, parseInt(element.style.top) || 0);
+        };
+      };
+    }
+
+    // ------------------------------------------------------------------------
+    // MEMBER UI & SELECTION & TAG FILTER CHIPS
+    // ------------------------------------------------------------------------
+    function renderMembersUI() {
+      const filterEl = document.getElementById('memberFilterList');
+      const selectAssignee = document.getElementById('noteAssignee');
+      if (!filterEl || !selectAssignee) return;
+
+      selectAssignee.innerHTML = '<option value="">-- ไม่ระบุ (ทุกคนช่วยได้) --</option>';
+      filterEl.querySelectorAll('.member-chip, .tag-chip, .filter-divider').forEach(el => el.remove());
+
+      // Render Member Chips
+      Object.values(members).forEach(m => {
+        const displayName = m.nickname || m.name || 'Member';
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = `${displayName} (${m.role || 'Member'})`;
+        selectAssignee.appendChild(opt);
+
+        const chip = document.createElement('button');
+        chip.className = `member-chip px-2.5 py-1 rounded-full font-medium transition whitespace-nowrap ${currentFilter === m.id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`;
+        chip.textContent = displayName;
+        chip.onclick = () => setFilter(m.id);
+        filterEl.appendChild(chip);
+      });
+
+      // Render Active Tag Chips
+      const activeTags = getActiveTags();
+      if (activeTags.length > 0) {
+        const divider = document.createElement('span');
+        divider.className = 'filter-divider text-slate-300 font-light px-1';
+        divider.textContent = '|';
+        filterEl.appendChild(divider);
+
+        activeTags.forEach(tag => {
+          const info = getTagInfo(tag);
+          const isSelected = currentFilter.toUpperCase() === tag.toUpperCase();
+          const chip = document.createElement('button');
+          chip.className = `tag-chip px-2.5 py-1 rounded-full font-semibold transition border flex items-center gap-1 whitespace-nowrap shadow-xs ${isSelected ? 'bg-slate-800 text-white border-slate-800 ring-2 ring-indigo-400' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`;
+          chip.innerHTML = `<span>${info.icon}</span><span>${escapeHTML(tag)}</span>`;
+          chip.onclick = () => setFilter(isSelected ? 'all' : tag);
+          filterEl.appendChild(chip);
+        });
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // CONTROLS & VIEWS
+    // ------------------------------------------------------------------------
+    function switchView(view) {
+      currentView = view;
+      const kanbanEl = document.getElementById('kanbanContainer');
+      const canvasEl = document.getElementById('canvasContainer');
+      const kBtn = document.getElementById('viewBoardBtn');
+      const cBtn = document.getElementById('viewCanvasBtn');
+
+      if (view === 'kanban') {
+        kanbanEl.classList.remove('hidden');
+        canvasEl.classList.add('hidden');
+        kBtn.className = "px-3 py-1.5 rounded-md transition-all bg-white shadow text-slate-800";
+        cBtn.className = "px-3 py-1.5 rounded-md transition-all text-slate-600 hover:text-slate-900";
+      } else {
+        kanbanEl.classList.add('hidden');
+        canvasEl.classList.remove('hidden');
+        cBtn.className = "px-3 py-1.5 rounded-md transition-all bg-white shadow text-slate-800";
+        kBtn.className = "px-3 py-1.5 rounded-md transition-all text-slate-600 hover:text-slate-900";
+      }
+      renderApp();
+    }
+
+    function setFilter(filterId) {
+      currentFilter = filterId;
+      const filterAllBtn = document.getElementById('filter-all');
+      if (filterAllBtn) {
+        filterAllBtn.className = `px-2.5 py-1 rounded-full font-medium whitespace-nowrap ${filterId === 'all' ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`;
+      }
+      renderMembersUI();
+      renderApp();
+    }
+
+    function createNewNotePrompt(defaultStatus = 'todo', x = 120, y = 140) {
+      document.getElementById('noteId').value = '';
+      document.getElementById('noteText').value = '';
+      if (currentUser) {
+        document.getElementById('noteAssignee').value = currentUser.id;
+      }
+      document.getElementById('noteStatus').value = defaultStatus;
+      document.getElementById('modalTitle').textContent = '📝 แปะโน้ตงานใหม่';
+      window.tempCoords = { x, y };
+      document.getElementById('noteModal').classList.remove('hidden');
+      setTimeout(() => {
+        const inp = document.getElementById('noteText');
+        if (inp) inp.focus();
+      }, 100);
+    }
+
+    function editNote(id) {
+      const task = tasks[id];
+      if (!task) return;
+      document.getElementById('noteId').value = task.id;
+      document.getElementById('noteText').value = task.title;
+      document.getElementById('noteAssignee').value = task.assignee || '';
+      document.getElementById('noteStatus').value = task.status || 'todo';
+      const colorRadio = document.querySelector(`input[name="noteColor"][value="${task.color}"]`);
+      if (colorRadio) colorRadio.checked = true;
+      document.getElementById('modalTitle').textContent = '✏️ แก้ไขโน้ตงาน';
+      document.getElementById('noteModal').classList.remove('hidden');
+    }
+
+    function saveNote(e) {
+      e.preventDefault();
+      const id = document.getElementById('noteId').value || 'task_' + Date.now();
+      const text = document.getElementById('noteText').value.trim();
+      const assignee = document.getElementById('noteAssignee').value;
+      const status = document.getElementById('noteStatus').value;
+      const colorRadio = document.querySelector('input[name="noteColor"]:checked');
+      const color = colorRadio ? colorRadio.value : 'yellow';
+      
+      const existing = tasks[id] || {};
+      const coords = window.tempCoords || { x: 150, y: 150 };
+
+      const taskData = {
+        id,
+        title: text,
+        assignee,
+        status,
+        color,
+        creator: existing.creator || (currentUser ? currentUser.nickname : 'Anonymous'),
+        x: existing.x !== undefined ? existing.x : coords.x,
+        y: existing.y !== undefined ? existing.y : coords.y,
+        rotation: existing.rotation !== undefined ? existing.rotation : (Math.random() * 4 - 2),
+        updatedAt: Date.now()
+      };
+
+      saveTaskToDB(taskData);
+      closeNoteModal();
+    }
+
+    function handleCanvasDoubleClick(e) {
+      if (e.target.id === 'canvasSurface' || e.target.id === 'canvasContainer') {
+        const rect = document.getElementById('canvasSurface').getBoundingClientRect();
+        createNewNotePrompt('todo', e.clientX - rect.left, e.clientY - rect.top);
+      }
+    }
+
+    function closeNoteModal() { document.getElementById('noteModal').classList.add('hidden'); }
+
+    function escapeHTML(str) {
+      return (str || '').replace(/[&<>'"]/g, function(tag) {
+        const lookup = {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          "'": '&#39;',
+          '"': '&quot;'
+        };
+        return lookup[tag] || tag;
+      });
+    }
+
+    window.onload = initAuth;
+  </script>
+</body>
+</html>
