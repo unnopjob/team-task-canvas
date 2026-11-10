@@ -740,9 +740,7 @@
 
         db.ref('members').on('value', (snap) => {
           const val = snap.val();
-          if (val) {
-            members = Object.assign({}, members, val);
-          }
+          members = val ? val : {};
           renderMembersUI();
           renderApp();
         });
