@@ -379,11 +379,12 @@
           <div>
             <label class="block font-semibold text-slate-700 mb-1">สีโพสต์อิท</label>
             <div class="flex items-center gap-1.5 pt-1.5">
-              <label class="cursor-pointer"><input type="radio" name="noteColor" value="yellow" class="sr-only peer" checked><span class="block w-6 h-6 rounded-full bg-amber-200 border-2 border-transparent peer-checked:border-slate-800"></span></label>
-              <label class="cursor-pointer"><input type="radio" name="noteColor" value="blue" class="sr-only peer"><span class="block w-6 h-6 rounded-full bg-sky-200 border-2 border-transparent peer-checked:border-slate-800"></span></label>
-              <label class="cursor-pointer"><input type="radio" name="noteColor" value="green" class="sr-only peer"><span class="block w-6 h-6 rounded-full bg-emerald-200 border-2 border-transparent peer-checked:border-slate-800"></span></label>
-              <label class="cursor-pointer"><input type="radio" name="noteColor" value="pink" class="sr-only peer"><span class="block w-6 h-6 rounded-full bg-rose-200 border-2 border-transparent peer-checked:border-slate-800"></span></label>
-              <label class="cursor-pointer"><input type="radio" name="noteColor" value="purple" class="sr-only peer"><span class="block w-6 h-6 rounded-full bg-purple-200 border-2 border-transparent peer-checked:border-slate-800"></span></label>
+              <label class="cursor-pointer" title="สีเหลือง"><input type="radio" name="noteColor" value="yellow" class="sr-only peer" checked><span class="block w-6 h-6 rounded-full bg-amber-200 border-2 border-transparent peer-checked:border-slate-800 hover:scale-110 transition-transform"></span></label>
+              <label class="cursor-pointer" title="สีฟ้า"><input type="radio" name="noteColor" value="blue" class="sr-only peer"><span class="block w-6 h-6 rounded-full bg-sky-200 border-2 border-transparent peer-checked:border-slate-800 hover:scale-110 transition-transform"></span></label>
+              <label class="cursor-pointer" title="สีเขียว"><input type="radio" name="noteColor" value="green" class="sr-only peer"><span class="block w-6 h-6 rounded-full bg-emerald-200 border-2 border-transparent peer-checked:border-slate-800 hover:scale-110 transition-transform"></span></label>
+              <label class="cursor-pointer" title="สีชมพู"><input type="radio" name="noteColor" value="pink" class="sr-only peer"><span class="block w-6 h-6 rounded-full bg-rose-200 border-2 border-transparent peer-checked:border-slate-800 hover:scale-110 transition-transform"></span></label>
+              <label class="cursor-pointer" title="สีม่วง"><input type="radio" name="noteColor" value="purple" class="sr-only peer"><span class="block w-6 h-6 rounded-full bg-purple-200 border-2 border-transparent peer-checked:border-slate-800 hover:scale-110 transition-transform"></span></label>
+              <label class="cursor-pointer" title="สีแดง (ด่วน)"><input type="radio" name="noteColor" value="red" class="sr-only peer"><span class="block w-6 h-6 rounded-full bg-red-400 border-2 border-transparent peer-checked:border-slate-800 hover:scale-110 transition-transform"></span></label>
             </div>
           </div>
         </div>
@@ -528,6 +529,13 @@
         accent: 'bg-purple-200/60 text-purple-900',
         tape: 'bg-purple-200/70'
       },
+      red: {
+        bg: 'bg-gradient-to-b from-rose-100 via-red-100 to-red-200/90',
+        border: 'border-red-400/80 shadow-red-200/50',
+        text: 'text-red-950',
+        accent: 'bg-red-200/80 text-red-900 font-bold',
+        tape: 'bg-red-300/80'
+      }
     };
 
     // ------------------------------------------------------------------------
@@ -661,6 +669,8 @@
       '#ใบเสนอราคา': { icon: '📋', color: 'bg-blue-100 text-blue-900 border-blue-300 font-bold' },
       '#QT': { icon: '📋', color: 'bg-blue-100 text-blue-900 border-blue-300 font-bold' },
       '#QUOTATION': { icon: '📋', color: 'bg-blue-100 text-blue-900 border-blue-300 font-bold' },
+      '#ราคา': { icon: '🏷️', color: 'bg-amber-100 text-amber-900 border-amber-300 font-bold' },
+      '#PRICE': { icon: '🏷️', color: 'bg-amber-100 text-amber-900 border-amber-300 font-bold' },
       '#เอกสาร': { icon: '📄', color: 'bg-teal-100 text-teal-900 border-teal-300 font-bold' },
       '#DOC': { icon: '📄', color: 'bg-teal-100 text-teal-900 border-teal-300 font-bold' },
       '#POC': { icon: '🧪', color: 'bg-purple-100 text-purple-900 border-purple-300 font-bold' },
@@ -743,6 +753,7 @@
         const localTasks = localStorage.getItem('team_canvas_tasks');
         if (localTasks) tasks = JSON.parse(localTasks);
         runRetentionMaintenance();
+        checkPriceTaskSLA();
       } catch (e) {}
 
       // Load saved user
@@ -857,6 +868,7 @@
             tasks = {};
           }
           runRetentionMaintenance();
+          checkPriceTaskSLA();
           renderMembersUI();
           renderApp();
           if (document.getElementById('trashModal') && !document.getElementById('trashModal').classList.contains('hidden')) {
@@ -908,6 +920,7 @@
           if (!tasks[id].completedAt) tasks[id].completedAt = Date.now();
         } else {
           delete tasks[id].completedAt;
+          checkPriceTaskSLA();
         }
         tasks[id].updatedAt = Date.now();
         try { localStorage.setItem('team_canvas_tasks', JSON.stringify(tasks)); } catch (e) {}
@@ -983,6 +996,81 @@
       if (hasChanges) {
         try { localStorage.setItem('team_canvas_tasks', JSON.stringify(tasks)); } catch (e) {}
       }
+    }
+
+    // ------------------------------------------------------------------------
+    // SLA & AUTO ESCALATION RULES (QUOTATION / PRICE <= 2 DAYS)
+    // ------------------------------------------------------------------------
+    const SLA_RULES = {
+      PRICE_MAX_DAYS: 2,
+      PRICE_REGEX: /#ใบเสนอราคา|#QT|#QUOTATION|#PRICE|#ราคา|ราคา/i,
+      URGENT_TAG: '#ด่วน'
+    };
+
+    function getTaskCreatedAt(task) {
+      if (task.createdAt && typeof task.createdAt === 'number') return task.createdAt;
+      if (task.id && task.id.startsWith('task_')) {
+        const parsed = parseInt(task.id.replace('task_', ''), 10);
+        if (!isNaN(parsed) && parsed > 1600000000000) return parsed;
+      }
+      if (task.updatedAt && typeof task.updatedAt === 'number') return task.updatedAt;
+      return Date.now();
+    }
+
+    function checkPriceTaskSLA() {
+      const now = Date.now();
+      const slaLimitMs = SLA_RULES.PRICE_MAX_DAYS * 24 * 60 * 60 * 1000;
+      let hasChanges = false;
+
+      Object.values(tasks).forEach(task => {
+        if (!task || !task.id || task.isDeleted || task.status === 'done') return;
+
+        const isPriceTask = SLA_RULES.PRICE_REGEX.test(task.title || '');
+        if (!isPriceTask) return;
+
+        const createdAt = getTaskCreatedAt(task);
+        const elapsed = now - createdAt;
+
+        if (elapsed > slaLimitMs) {
+          let updated = false;
+
+          // 1. Automatically change note color to red
+          if (task.color !== 'red') {
+            task.color = 'red';
+            updated = true;
+          }
+
+          // 2. Automatically append #ด่วน to title if not present
+          if (!/#ด่วน/i.test(task.title || '')) {
+            task.title = (task.title ? task.title + ' ' + SLA_RULES.URGENT_TAG : SLA_RULES.URGENT_TAG).trim();
+            updated = true;
+          }
+
+          // 3. Mark SLA overdue flag
+          if (!task.isOverdueSLA) {
+            task.isOverdueSLA = true;
+            updated = true;
+          }
+
+          if (updated) {
+            task.updatedAt = now;
+            hasChanges = true;
+            if (isFirebaseReady) {
+              db.ref(`tasks/${task.id}`).update({
+                color: task.color,
+                title: task.title,
+                isOverdueSLA: true,
+                updatedAt: now
+              }).catch(err => console.warn("Firebase SLA update warning:", err));
+            }
+          }
+        }
+      });
+
+      if (hasChanges) {
+        try { localStorage.setItem('team_canvas_tasks', JSON.stringify(tasks)); } catch (e) {}
+      }
+      return hasChanges;
     }
 
     function renderTrashUI() {
@@ -1197,6 +1285,12 @@
               <button onclick="deleteTask('${task.id}')" title="ลบเข้าถังขยะ" class="w-6 h-6 rounded-md hover:bg-black/10 flex items-center justify-center text-xs transition active:scale-95 hover:text-rose-600">✕</button>
             </div>
           </div>
+          ${(task.isOverdueSLA && task.status !== 'done') ? `
+            <div class="flex items-center gap-1.5 px-2.5 py-1 mb-2 rounded-lg bg-red-500/15 border border-red-400/50 text-[10px] font-bold text-red-900 shadow-2xs">
+              <span class="animate-bounce">🚨</span>
+              <span>งานราคาค้างเกิน 2 วัน (#ด่วน)</span>
+            </div>
+          ` : ''}
           ${renderTagBadgesHTML(task.title)}
           <p class="font-medium text-slate-800 text-[13px] leading-relaxed mb-2.5 whitespace-pre-wrap break-words">${escapeHTML(task.title)}</p>
           ${renderTaskChecklistHTML(task, false)}
@@ -1254,6 +1348,12 @@
               <button onclick="deleteTask('${task.id}')" title="ลบเข้าถังขยะ" class="w-6 h-6 rounded-md hover:bg-black/10 flex items-center justify-center text-xs transition active:scale-95 hover:text-rose-600">✕</button>
             </div>
           </div>
+          ${(task.isOverdueSLA && task.status !== 'done') ? `
+            <div class="flex items-center gap-1.5 px-2 py-0.5 mb-1.5 rounded-md bg-red-500/15 border border-red-400/50 text-[10px] font-bold text-red-900 shadow-2xs">
+              <span class="animate-bounce">🚨</span>
+              <span>งานราคาค้างเกิน 2 วัน (#ด่วน)</span>
+            </div>
+          ` : ''}
           ${renderTagBadgesHTML(task.title)}
           <p class="font-medium text-slate-800 text-[13px] leading-relaxed mb-2 whitespace-pre-wrap break-words">${escapeHTML(task.title)}</p>
           ${renderTaskChecklistHTML(task, true)}
@@ -1545,6 +1645,8 @@
         document.getElementById('noteAssignee').value = currentUser.id;
       }
       document.getElementById('noteStatus').value = defaultStatus;
+      const defaultYellow = document.querySelector('input[name="noteColor"][value="yellow"]');
+      if (defaultYellow) defaultYellow.checked = true;
       document.getElementById('modalTitle').textContent = '📝 แปะโน้ตงานใหม่';
       window.tempCoords = { x, y };
       document.getElementById('noteModal').classList.remove('hidden');
@@ -1608,11 +1710,16 @@
         color,
         checklist: currentModalChecklist,
         creator: existing.creator || (currentUser ? currentUser.nickname : 'Anonymous'),
+        createdAt: existing.createdAt || (id.startsWith('task_') ? parseInt(id.replace('task_', '')) : Date.now()),
         x: existing.x !== undefined ? existing.x : coords.x,
         y: existing.y !== undefined ? existing.y : coords.y,
         rotation: existing.rotation !== undefined ? existing.rotation : (Math.random() * 4 - 2),
         updatedAt: Date.now()
       };
+
+      if (existing.isOverdueSLA) {
+        taskData.isOverdueSLA = true;
+      }
 
       if (status === 'done') {
         taskData.completedAt = existing.completedAt || Date.now();
@@ -1624,6 +1731,7 @@
       }
 
       saveTaskToDB(taskData);
+      checkPriceTaskSLA();
       closeNoteModal();
     }
 
@@ -1649,8 +1757,13 @@
       });
     }
 
-    // Periodic background auto-purge (runs every hour)
-    setInterval(runRetentionMaintenance, 60 * 60 * 1000);
+    // Periodic background auto-purge & SLA escalation check (runs every 5 minutes)
+    setInterval(() => {
+      runRetentionMaintenance();
+      if (checkPriceTaskSLA()) {
+        renderApp();
+      }
+    }, 5 * 60 * 1000);
 
     window.onload = initAuth;
   </script>
