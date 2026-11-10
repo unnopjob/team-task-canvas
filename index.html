@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Team Task Canvas - Digital Distribution</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Microsoft Authentication Library (MSAL.js) -->
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
   <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
@@ -30,52 +32,52 @@
 
   <!-- 1. DIGITAL DISTRIBUTION SECURE LOGIN OVERLAY -->
   <div id="authScreen" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-2xl p-6 sm:p-7 max-w-sm w-full space-y-4">
-      <div class="text-center space-y-1">
+    <div class="bg-white rounded-2xl shadow-2xl p-6 sm:p-8 max-w-sm w-full space-y-5 text-center">
+      <div class="space-y-1">
         <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 text-3xl shadow-inner mb-1">
           📌
         </div>
         <h2 class="text-lg font-bold text-slate-800 tracking-tight">Team Task Canvas</h2>
         <p class="text-xs font-semibold text-indigo-600">Digital Distribution Co., Ltd.</p>
-        <p class="text-[11px] text-slate-400">ระบบกระดานงานทีมเฉพาะพนักงานภายใน</p>
+        <p class="text-[11px] text-slate-400">ระบบกระดานงานทีม ยืนยันตัวตนผ่าน Microsoft 365</p>
       </div>
 
-      <form onsubmit="handleTeamLogin(event)" class="space-y-3.5 text-xs pt-1">
-        <div>
-          <label class="block font-semibold text-slate-700 mb-1">รหัสผ่านทีม (Team Passcode) <span class="text-rose-500">*</span></label>
-          <input type="password" id="loginPasscode" required placeholder="กรอกรหัสผ่าน 4 หลัก" maxlength="8" class="w-full border border-slate-300 rounded-lg p-2.5 text-center text-base tracking-widest font-mono focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600">
-        </div>
+      <!-- PRIMARY: MICROSOFT 365 SIGN IN -->
+      <div class="space-y-2.5 pt-1">
+        <button onclick="loginWithMicrosoft()" class="w-full flex items-center justify-center gap-3 py-3 px-4 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl shadow-sm text-xs font-semibold text-slate-800 transition active:scale-95">
+          <svg class="w-4 h-4 shrink-0" viewBox="0 0 23 23">
+            <path fill="#f35325" d="M1 1h10v10H1z"/>
+            <path fill="#81bc06" d="M12 1h10v10H12z"/>
+            <path fill="#05a6f0" d="M1 12h10v10H1z"/>
+            <path fill="#ffba08" d="M12 12h10v10H12z"/>
+          </svg>
+          เข้าสู่ระบบด้วย Microsoft 365
+        </button>
+        <p class="text-[10px] text-slate-400 leading-normal">ใช้อีเมล @digitaldistribution.co.th และรหัสผ่าน M365 ของบริษัท</p>
+      </div>
 
-        <div>
-          <label class="block font-semibold text-slate-700 mb-1">อีเมลบริษัท (M365) <span class="text-rose-500">*</span></label>
-          <input type="email" id="loginEmail" required placeholder="เช่น unnop@digitaldistribution.co.th" class="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:border-indigo-600">
-          <p class="text-[10px] text-slate-400 mt-1">เฉพาะอีเมล @digitaldistribution.co.th เท่านั้น</p>
-        </div>
+      <div class="relative flex py-0.5 items-center">
+        <div class="flex-grow border-t border-slate-200"></div>
+        <span class="flex-shrink mx-3 text-slate-400 text-[11px]">หรือใช้รหัสผ่านทีม</span>
+        <div class="flex-grow border-t border-slate-200"></div>
+      </div>
 
+      <!-- SECONDARY: PASSCODE & EMAIL BACKUP -->
+      <form onsubmit="handleTeamLogin(event)" class="space-y-3 text-xs text-left">
         <div>
-          <label class="block font-semibold text-slate-700 mb-1">ชื่อเล่น / ชื่อที่ใช้ในบอร์ด <span class="text-rose-500">*</span></label>
-          <input type="text" id="loginNickname" required placeholder="เช่น พี่โอม, โอม" class="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:border-indigo-600">
+          <label class="block font-semibold text-slate-700 mb-1">รหัสผ่านทีม (Team Passcode)</label>
+          <input type="password" id="loginPasscode" placeholder="กรอกรหัสผ่าน 4 หลัก" maxlength="8" class="w-full border border-slate-300 rounded-lg p-2 text-center text-sm tracking-widest font-mono focus:outline-none focus:border-indigo-600">
         </div>
-
         <div>
-          <label class="block font-semibold text-slate-700 mb-1">ฝ่าย / ตำแหน่ง</label>
-          <input type="text" id="loginRole" placeholder="เช่น Sales, IT, Dev, Admin" class="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:border-indigo-600">
+          <label class="block font-semibold text-slate-700 mb-1">อีเมลบริษัท (M365)</label>
+          <input type="email" id="loginEmail" placeholder="เช่น unnop@digitaldistribution.co.th" class="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:border-indigo-600">
         </div>
-
         <div>
-          <label class="block font-semibold text-slate-700 mb-1">สีประจำตัวของคุณ</label>
-          <div class="flex items-center justify-between pt-1" id="loginColorPicker">
-            <label class="cursor-pointer"><input type="radio" name="loginColor" value="#4f46e5" class="sr-only peer" checked><span class="block w-7 h-7 rounded-full bg-indigo-600 border-2 border-transparent peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-indigo-600"></span></label>
-            <label class="cursor-pointer"><input type="radio" name="loginColor" value="#059669" class="sr-only peer"><span class="block w-7 h-7 rounded-full bg-emerald-600 border-2 border-transparent peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-emerald-600"></span></label>
-            <label class="cursor-pointer"><input type="radio" name="loginColor" value="#d97706" class="sr-only peer"><span class="block w-7 h-7 rounded-full bg-amber-600 border-2 border-transparent peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-amber-600"></span></label>
-            <label class="cursor-pointer"><input type="radio" name="loginColor" value="#dc2626" class="sr-only peer"><span class="block w-7 h-7 rounded-full bg-rose-600 border-2 border-transparent peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-rose-600"></span></label>
-            <label class="cursor-pointer"><input type="radio" name="loginColor" value="#7c3aed" class="sr-only peer"><span class="block w-7 h-7 rounded-full bg-purple-600 border-2 border-transparent peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-purple-600"></span></label>
-            <label class="cursor-pointer"><input type="radio" name="loginColor" value="#0891b2" class="sr-only peer"><span class="block w-7 h-7 rounded-full bg-cyan-600 border-2 border-transparent peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-cyan-600"></span></label>
-          </div>
+          <label class="block font-semibold text-slate-700 mb-1">ชื่อเล่น / ชื่อที่ใช้ในบอร์ด</label>
+          <input type="text" id="loginNickname" placeholder="เช่น พี่โอม, โอม" class="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:border-indigo-600">
         </div>
-
-        <button type="submit" class="w-full py-2.5 mt-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition active:scale-95 shadow-md flex items-center justify-center gap-1.5">
-          <span>🔒</span> เข้าสู่กระดานงาน
+        <button type="submit" class="w-full py-2.5 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-900 transition active:scale-95 shadow-xs">
+          เข้าใช้งานด้วยรหัสผ่านทีม
         </button>
       </form>
     </div>
@@ -330,6 +332,30 @@
       console.warn("Firebase initialize error:", e);
     }
 
+    // ------------------------------------------------------------------------
+    // MICROSOFT 365 MSAL CONFIGURATION
+    // ------------------------------------------------------------------------
+    const msalConfig = {
+      auth: {
+        clientId: "e9f0a0e4-1bb0-4e69-afe4-ce2548e22403",
+        authority: "https://login.microsoftonline.com/c9dfeaa4-db27-4c66-b8fd-4cb11431c639",
+        redirectUri: "https://unnopjob.github.io/team-task-canvas/"
+      },
+      cache: {
+        cacheLocation: "localStorage",
+        storeAuthStateInCookie: false
+      }
+    };
+
+    let msalInstance = null;
+    try {
+      if (typeof msal !== 'undefined') {
+        msalInstance = new msal.PublicClientApplication(msalConfig);
+      }
+    } catch (e) {
+      console.warn("MSAL initialization warning:", e);
+    }
+
     let tasks = {};
     let members = {};
     let currentView = 'kanban';
@@ -352,14 +378,71 @@
       allowedDomain: '@digitaldistribution.co.th'
     };
 
+    async function loginWithMicrosoft() {
+      if (!msalInstance) {
+        alert("กำลังโหลดระบบเชื่อมต่อ Microsoft Sign-in กรุณาลองใหม่อีกครั้ง");
+        return;
+      }
+
+      try {
+        if (msalInstance.initialize) {
+          await msalInstance.initialize();
+        }
+        const loginRequest = {
+          scopes: ["openid", "profile", "email", "User.Read"]
+        };
+        const loginResponse = await msalInstance.loginPopup(loginRequest);
+        const account = loginResponse.account || (msalInstance.getAllAccounts && msalInstance.getAllAccounts()[0]);
+        if (!account) throw new Error("ไม่พบบัญชีผู้ใช้งาน");
+
+        const email = (account.username || (account.idTokenClaims && account.idTokenClaims.email) || '').toLowerCase();
+        const displayName = account.name || email.split('@')[0] || 'Team Member';
+
+        // ตรวจสอบโดเมนบริษัท
+        if (!email.endsWith(TEAM_SECURITY.allowedDomain.toLowerCase())) {
+          alert("❌ บัญชี " + email + " ไม่ใช่อีเมลบริษัท " + TEAM_SECURITY.allowedDomain);
+          return;
+        }
+
+        const uid = 'm365_' + email.replace(/[^a-zA-Z0-9]/g, '_');
+        currentUser = {
+          id: uid,
+          email: email,
+          name: displayName,
+          nickname: displayName,
+          role: 'Digital Distribution Team',
+          color: '#4f46e5',
+          photo: null,
+          authProvider: 'm365',
+          lastActive: Date.now()
+        };
+
+        try {
+          localStorage.setItem('team_canvas_current_user', JSON.stringify(currentUser));
+        } catch (e) {}
+
+        members[uid] = currentUser;
+
+        if (isFirebaseReady) {
+          db.ref(`members/${uid}`).set(currentUser).catch(err => console.warn(err));
+        }
+
+        document.getElementById('authScreen').classList.add('hidden');
+        onUserReady();
+      } catch (err) {
+        console.error("Microsoft login error:", err);
+        if (err.errorCode === 'user_cancelled') return;
+        alert("เข้าสู่ระบบ Microsoft ไม่สำเร็จ: " + (err.errorMessage || err.message));
+      }
+    }
+
     function handleTeamLogin(e) {
       e.preventDefault();
       const passcode = (document.getElementById('loginPasscode').value || '').trim();
       const email = (document.getElementById('loginEmail').value || '').trim().toLowerCase();
       const nickname = (document.getElementById('loginNickname').value || '').trim();
-      const role = (document.getElementById('loginRole').value || '').trim() || 'Team Member';
-      const colorRadio = document.querySelector('input[name="loginColor"]:checked');
-      const color = colorRadio ? colorRadio.value : '#4f46e5';
+      const role = 'Digital Distribution Team';
+      const color = '#4f46e5';
 
       // 1. ตรวจสอบรหัสผ่านทีม
       if (passcode !== TEAM_SECURITY.passcode) {
@@ -375,7 +458,6 @@
         return;
       }
 
-      // สร้าง UID สวยงามจากอีเมล
       const cleanEmail = email.replace(/[^a-zA-Z0-9]/g, '_');
       const uid = 'user_' + cleanEmail;
 
@@ -387,6 +469,7 @@
         role: role,
         color: color,
         photo: null,
+        authProvider: 'passcode',
         lastActive: Date.now()
       };
 
